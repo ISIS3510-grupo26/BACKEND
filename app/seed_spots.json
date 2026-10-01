@@ -1,0 +1,434 @@
+[
+  {
+    "id": "conda-de-bons",
+    "emoji": "🍔",
+    "emoji_background": "#FFFBEB",
+    "emoji_border": "#FEF3C7",
+    "name": "Conda de Bons",
+    "subtitle": "Burgers & Fries • North Quad Plaza",
+    "rating": 5.0,
+    "price": "$18.500 COP",
+    "distance": "5 min walk",
+    "walk_minutes": 5,
+    "is_budget": false,
+    "is_vegetarian": false,
+    "is_high_protein": true,
+    "affinity_percent": 88,
+    "category": "FOOD_TRUCKS",
+    "note_label": "Student tip",
+    "note": "Saved for 10% Engineering card discount and quick ~8 min wait.",
+    "uni_card_perk": "10% off for Engineering students with UniCard.",
+    "total_reviews": 31,
+    "menu": [
+      {
+        "emoji": "🍔",
+        "emoji_background": "#FFFBEB",
+        "name": "Classic Cheese Smash",
+        "description": "Double patty, cheddar, house sauce.",
+        "price": "$18.500",
+        "is_student_pick": true
+      },
+      {
+        "emoji": "🍟",
+        "emoji_background": "#FFF7ED",
+        "name": "Crispy Fries",
+        "description": "Sea salt, paprika, garlic mayo.",
+        "price": "$7.000"
+      },
+      {
+        "emoji": "🥤",
+        "emoji_background": "#FEF2F2",
+        "name": "Strawberry Shake",
+        "description": "Fresh strawberries, vanilla ice cream.",
+        "price": "$8.000"
+      }
+    ],
+    "reviews": [
+      {
+        "author_name": "Laura G.",
+        "initials": "LG",
+        "program": "Engineering, Sem 5",
+        "stars": 5,
+        "text": "Quick, filling and the card discount actually works every time.",
+        "dined_ago": "Dined 3 days ago",
+        "helpful_count": 11
+      },
+      {
+        "author_name": "Andrés M.",
+        "initials": "AM",
+        "program": "Economics, Sem 7",
+        "stars": 4,
+        "text": "Good burgers, line gets long at 12:30 so go a bit earlier.",
+        "dined_ago": "Dined last week",
+        "helpful_count": 6
+      }
+    ]
+  },
+  {
+    "id": "green-bowl-co",
+    "emoji": "🥗",
+    "emoji_background": "#ECFDF5",
+    "emoji_border": "#D1FAE5",
+    "name": "Green Bowl Co.",
+    "subtitle": "Healthy Bowls • Central Library 1F",
+    "rating": 4.0,
+    "price": "$15.000 COP",
+    "distance": "3 min walk",
+    "walk_minutes": 3,
+    "is_budget": true,
+    "is_vegetarian": true,
+    "is_high_protein": false,
+    "affinity_percent": 91,
+    "category": "STUDY_SPOTS",
+    "note_label": "Student tip",
+    "note": "Huge portions, free infused water refill, plenty of outlets nearby.",
+    "total_reviews": 27,
+    "menu": [
+      {
+        "emoji": "🥗",
+        "emoji_background": "#ECFDF5",
+        "name": "Green Power Bowl",
+        "description": "Quinoa, avocado, chickpeas, tahini.",
+        "price": "$15.000",
+        "is_student_pick": true
+      },
+      {
+        "emoji": "🍜",
+        "emoji_background": "#FFF7ED",
+        "name": "Teriyaki Tofu Bowl",
+        "description": "Brown rice, broccoli, sesame.",
+        "price": "$16.000"
+      },
+      {
+        "emoji": "🥤",
+        "emoji_background": "#F0FDF4",
+        "name": "Detox Green Juice",
+        "description": "Spinach, apple, ginger, lime.",
+        "price": "$7.500"
+      }
+    ],
+    "reviews": [
+      {
+        "author_name": "Valentina R.",
+        "initials": "VR",
+        "program": "Biology, Sem 3",
+        "stars": 5,
+        "text": "Perfect study lunch. Big bowls and you can refill water for free.",
+        "dined_ago": "Dined yesterday",
+        "helpful_count": 8
+      },
+      {
+        "author_name": "Juan D.",
+        "initials": "JD",
+        "program": "Law, Sem 9",
+        "stars": 4,
+        "text": "Healthy and fresh, a bit pricey but worth it.",
+        "dined_ago": "Dined 5 days ago",
+        "helpful_count": 3
+      }
+    ]
+  },
+  {
+    "id": "nitro-coffee",
+    "emoji": "☕",
+    "emoji_background": "#FFF7ED",
+    "emoji_border": "#FFEDD5",
+    "name": "Nitro Coffee & Brew",
+    "subtitle": "Café & Bakery • Science Bldg Patio",
+    "rating": 5.0,
+    "price": "$6.500 COP",
+    "distance": "2 min walk",
+    "walk_minutes": 2,
+    "is_budget": true,
+    "is_vegetarian": true,
+    "is_high_protein": false,
+    "affinity_percent": 93,
+    "category": "STUDY_SPOTS",
+    "note_label": "Student tip",
+    "note": "Best espresso shots between lectures. Very fast queue (~3 min).",
+    "uni_card_perk": "Free size upgrade on any coffee with UniCard.",
+    "total_reviews": 52,
+    "menu": [
+      {
+        "emoji": "☕",
+        "emoji_background": "#FFF7ED",
+        "name": "Nitro Cold Brew",
+        "description": "Slow-steeped 18h, nitrogen infused.",
+        "price": "$6.500",
+        "is_student_pick": true
+      },
+      {
+        "emoji": "🥐",
+        "emoji_background": "#FFFBEB",
+        "name": "Butter Croissant",
+        "description": "Baked fresh every morning.",
+        "price": "$4.500"
+      },
+      {
+        "emoji": "🍪",
+        "emoji_background": "#FEF2F2",
+        "name": "Choc Chip Cookie",
+        "description": "Sea salt, dark chocolate.",
+        "price": "$3.500"
+      }
+    ],
+    "reviews": [
+      {
+        "author_name": "Sofía L.",
+        "initials": "SL",
+        "program": "Architecture, Sem 6",
+        "stars": 5,
+        "text": "Fastest coffee on campus, never more than 3 min in line.",
+        "dined_ago": "Dined today",
+        "helpful_count": 17
+      }
+    ]
+  },
+  {
+    "id": "taqueria-la-esquina",
+    "emoji": "🌮",
+    "emoji_background": "#FFFBEB",
+    "emoji_border": "#FEF3C7",
+    "name": "Taquería La Esquina",
+    "subtitle": "Mexican Street Food • South Gate",
+    "rating": 4.0,
+    "price": "$12.000 COP",
+    "distance": "6 min walk",
+    "walk_minutes": 6,
+    "is_budget": true,
+    "is_vegetarian": false,
+    "is_high_protein": false,
+    "affinity_percent": 85,
+    "category": "FOOD_TRUCKS",
+    "note_label": "Student tip",
+    "note": "Combo student taco special on Tuesdays, generous extra guacamole.",
+    "uni_card_perk": "Taco Tuesday combo: 3 tacos + drink for $12.000 with UniCard.",
+    "total_reviews": 38,
+    "menu": [
+      {
+        "emoji": "🌮",
+        "emoji_background": "#FFFBEB",
+        "name": "Al Pastor Tacos (x3)",
+        "description": "Pineapple, cilantro, onion, salsa verde.",
+        "price": "$12.000",
+        "is_student_pick": true
+      },
+      {
+        "emoji": "🌯",
+        "emoji_background": "#FFF7ED",
+        "name": "Chicken Burrito",
+        "description": "Rice, black beans, pico de gallo.",
+        "price": "$14.000"
+      },
+      {
+        "emoji": "🥑",
+        "emoji_background": "#ECFDF5",
+        "name": "Guac & Chips",
+        "description": "Fresh avocado, lime, tortilla chips.",
+        "price": "$6.000"
+      }
+    ],
+    "reviews": [
+      {
+        "author_name": "Daniel C.",
+        "initials": "DC",
+        "program": "Physics, Sem 4",
+        "stars": 4,
+        "text": "Tuesday combo is a steal. Extra guac is genuinely extra.",
+        "dined_ago": "Dined 2 days ago",
+        "helpful_count": 7
+      }
+    ]
+  },
+  {
+    "id": "la-esquina-burger-lab",
+    "emoji": "🍔",
+    "emoji_background": "#FFFBEB",
+    "emoji_border": "#FEF3C7",
+    "name": "La Esquina Burger Lab",
+    "subtitle": "Burgers & Craft Shakes • Central Plaza",
+    "rating": 4.8,
+    "price": "$12.000 - $22.000 COP",
+    "distance": "3 min walk",
+    "walk_minutes": 3,
+    "is_budget": false,
+    "is_vegetarian": false,
+    "is_high_protein": true,
+    "affinity_percent": 98,
+    "category": "FOOD_TRUCKS",
+    "note_label": "Recommended",
+    "note": "92% of Engineering students with your budget loved their chipotle garlic sauce.",
+    "uni_card_perk": "UniCard discount 10% applied automatically at register.",
+    "total_reviews": 43,
+    "menu": [
+      {
+        "emoji": "🍔",
+        "emoji_background": "#FFFBEB",
+        "name": "Smash Bacon & Garlic",
+        "description": "Double smash, provolone, garlic aioli.",
+        "price": "$18.500"
+      },
+      {
+        "emoji": "🥬",
+        "emoji_background": "#ECFDF5",
+        "name": "Crispy Veggie Lentil",
+        "description": "Caramelized onions, oat bun.",
+        "price": "$16.500",
+        "is_student_pick": true
+      },
+      {
+        "emoji": "🍟",
+        "emoji_background": "#FFF7ED",
+        "name": "Loaded Truffle Fries",
+        "description": "Parmesan, fresh chives, truffle dip.",
+        "price": "$9.000"
+      },
+      {
+        "emoji": "🍋",
+        "emoji_background": "#F0FDF4",
+        "name": "Artisan Mint Lemonade",
+        "description": "Fresh mint, panela syrup, crushed ice.",
+        "price": "$5.500"
+      }
+    ],
+    "reviews": [
+      {
+        "author_name": "Mateo R.",
+        "initials": "MR",
+        "program": "CS Sem 6",
+        "stars": 5,
+        "text": "Best lunch spot near Engineering Lab 3! Fast queue between lectures and the chipotle dip is unmatched.",
+        "dined_ago": "Dined 2 days ago",
+        "helpful_count": 14
+      },
+      {
+        "author_name": "Camila V.",
+        "initials": "CV",
+        "program": "Design & Arts, Sem 4",
+        "stars": 5,
+        "text": "The veggie lentil burger is amazing, and with student card you get 10% discount on Tuesdays!",
+        "dined_ago": "Dined yesterday",
+        "helpful_count": 9
+      },
+      {
+        "author_name": "Santiago P.",
+        "initials": "SP",
+        "program": "Medicine, Sem 8",
+        "stars": 4,
+        "text": "Generous portions, quick grab and go under 10 minutes.",
+        "dined_ago": "Dined 4 days ago",
+        "helpful_count": 2
+      }
+    ]
+  },
+  {
+    "id": "poodle-pizza-slices",
+    "emoji": "🍕",
+    "emoji_background": "#FFF7ED",
+    "emoji_border": "#FFEDD5",
+    "name": "Poodle Pizza Slices",
+    "subtitle": "Wood-Fired Pizza • West Gate Courtyard",
+    "rating": 4.7,
+    "price": "$9.000 - $16.000 COP",
+    "distance": "5 min walk",
+    "walk_minutes": 5,
+    "is_budget": true,
+    "is_vegetarian": true,
+    "is_high_protein": false,
+    "affinity_percent": 95,
+    "category": "FOOD_TRUCKS",
+    "note_label": "Recommended",
+    "note": "High volume order spot before 1:00 PM classes. Fast service under 4 mins.",
+    "total_reviews": 22,
+    "menu": [
+      {
+        "emoji": "🍕",
+        "emoji_background": "#FFF7ED",
+        "name": "Margherita Slice",
+        "description": "San Marzano, fresh basil, mozzarella.",
+        "price": "$9.000",
+        "is_student_pick": true
+      },
+      {
+        "emoji": "🍕",
+        "emoji_background": "#FEF2F2",
+        "name": "Pepperoni Slice",
+        "description": "Cup-and-char pepperoni, hot honey.",
+        "price": "$11.000"
+      },
+      {
+        "emoji": "🥤",
+        "emoji_background": "#F0FDF4",
+        "name": "Italian Soda",
+        "description": "Blood orange or lemon.",
+        "price": "$5.000"
+      }
+    ],
+    "reviews": [
+      {
+        "author_name": "Isabella T.",
+        "initials": "IT",
+        "program": "Psychology, Sem 2",
+        "stars": 5,
+        "text": "Fastest slice on campus, always hot and crispy.",
+        "dined_ago": "Dined yesterday",
+        "helpful_count": 5
+      }
+    ]
+  },
+  {
+    "id": "el-vagon-street-food",
+    "emoji": "🌭",
+    "emoji_background": "#FEF2F2",
+    "emoji_border": "#FEE2E2",
+    "name": "El Vagón Street Food",
+    "subtitle": "Hot Dogs & Loaded Fries • Sports Arena",
+    "rating": 4.5,
+    "price": "$8.500 - $14.000 COP",
+    "distance": "2 min walk",
+    "walk_minutes": 2,
+    "is_budget": true,
+    "is_vegetarian": false,
+    "is_high_protein": false,
+    "affinity_percent": 90,
+    "category": "FOOD_TRUCKS",
+    "note_label": "Recommended",
+    "note": "Best budget combo match for students with fast break between lectures.",
+    "total_reviews": 19,
+    "menu": [
+      {
+        "emoji": "🌭",
+        "emoji_background": "#FEF2F2",
+        "name": "Classic Perro",
+        "description": "Crushed chips, pineapple sauce, quail egg.",
+        "price": "$8.500",
+        "is_student_pick": true
+      },
+      {
+        "emoji": "🍟",
+        "emoji_background": "#FFF7ED",
+        "name": "Salchipapa Loaded",
+        "description": "Fries, sausage, cheese, three sauces.",
+        "price": "$14.000"
+      },
+      {
+        "emoji": "🥤",
+        "emoji_background": "#FFFBEB",
+        "name": "Lulo Juice",
+        "description": "Fresh lulo, ice, a touch of sugar.",
+        "price": "$4.500"
+      }
+    ],
+    "reviews": [
+      {
+        "author_name": "Nicolás B.",
+        "initials": "NB",
+        "program": "Sports Science, Sem 5",
+        "stars": 4,
+        "text": "Cheap and huge portions. Perfect after training at the arena.",
+        "dined_ago": "Dined 3 days ago",
+        "helpful_count": 4
+      }
+    ]
+  }
+]
