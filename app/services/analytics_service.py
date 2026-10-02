@@ -3,12 +3,14 @@ from datetime import datetime, timedelta, timezone
 
 from app.repositories.telemetry_repository import TelemetryRepository
 from app.schemas import (FailedRequestsReport, FailureGroup, HourlyRanking, MonthlyActiveFavoritersReport,
-                         MonthlyFavoriters, SlowLoadGroup, SlowLoadsReport, SpotHourlyActivity, SpotViewsByHourReport)
+                         MonthlyFavoriters, MonthlyRatingUsage, RatingUsageReport, SlowLoadGroup, SlowLoadsReport,
+                         SpotHourlyActivity, SpotViewsByHourReport)
 
 Q_SLOW = "What is the percentage of restaurant page loads that take more than {s:g} seconds? By device and OS"
 Q_FAILED = "What is the percentage of failed requests when loading the restaurant's information?"
 Q_VIEWS_BY_HOUR = "Which restaurants receive the highest number of page views and searches during each hour?"
 Q_MONTHLY_FAVORITERS = "How many active users add one or more restaurants to their favorites each month?"
+Q_RATING_USAGE = "What percentage of users use the restaurant rating feature when looking at a restaurant's page?"
 
 
 def _pct(part: int, total: int) -> float:
@@ -122,3 +124,21 @@ class AnalyticsService:
                 for m in window
             ],
         )
+        
+    def rating_usage(self, months: int, tz_offset_minutes: int, now: datetime | None = None,
+                     platform: str | None = None) -> RatingUsageReport:
+        """BQ10: por mes, raters / viewers * 100. Devuelve todos los meses de la ventana (en 0 si no hubo vistas)."""
+        now = now or datetime.now(timezone.utc)
+        local = now.astimezone(timezone.utc) + timedelta(minutes=tz_offset_minutes)
+        index = local.year * 12 + local.month - 1
+        window = [f"{i // 12:04d}-{i % 12 + 1:02d}" for i in range(index - months + 1, index + 1)]
+        rows = {r["month"]: r for r in self.repo.rating_usage_by_month(tz_offset_minutes, window[0], window[-1],
+                                                                       platform=platform)}
+        by_month = []
+        for m in window:
+            viewers = rows[m]["viewers"] if m in rows else 0
+            raters = rows[m]["raters"] if m in rows else 0
+            by_month.append(MonthlyRatingUsage(month=m, viewers=viewers, raters=raters,
+                                               rating_usage_percentage=_pct(raters, viewers)))
+        return RatingUsageReport(question=Q_RATING_USAGE, months=months, tz_offset_minutes=tz_offset_minutes,
+                                 by_month=by_month)

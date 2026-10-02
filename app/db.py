@@ -53,7 +53,9 @@ CREATE TABLE IF NOT EXISTS reviews (
     stars         INTEGER NOT NULL,
     text          TEXT NOT NULL,
     dined_ago     TEXT NOT NULL,
-    helpful_count INTEGER NOT NULL DEFAULT 0
+    helpful_count INTEGER NOT NULL DEFAULT 
+    user_id       TEXT,                     -- NULL = resena del catalogo; con valor = la escribio ese usuario (BQ10)
+    created_at    TEXT                      -- UTC, solo en las resenas de usuarios
 );
 
 -- Cuentas de usuario. id es un uuid generado por el servidor: es el mismo userId de favorites y de la telemetria.
@@ -61,6 +63,7 @@ CREATE TABLE IF NOT EXISTS users (
     id            TEXT PRIMARY KEY,
     email         TEXT NOT NULL UNIQUE,        -- normalizado: sin espacios y en minusculas
     password_hash TEXT NOT NULL,               -- bcrypt; nunca la contrasena en texto plano
+    token_version INTEGER NOT NULL DEFAULT 0,  -- sube al cambiar la contrasena: invalida los tokens anteriores
     created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
@@ -122,6 +125,8 @@ CREATE INDEX IF NOT EXISTS idx_ple_screen_time ON page_load_events(screen, occur
 ADDED_COLUMNS = {
     "spots": [("latitude", "REAL"), ("longitude", "REAL")],
     "page_load_events": [("user_id", "TEXT")],
+    "reviews": [("user_id", "TEXT"), ("created_at", "TEXT")],
+    "users": [("token_version", "INTEGER NOT NULL DEFAULT 0")],
 }
 
 
@@ -141,6 +146,7 @@ def init_db(conn: sqlite3.Connection) -> None:
         for name, sql_type in columns:
             if name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_spot_user ON reviews(spot_id, user_id)")
     conn.execute("INSERT OR IGNORE INTO app_meta (key, value) VALUES ('jwt_secret', ?)", (secrets.token_hex(32),))
     conn.commit()
 

@@ -49,6 +49,18 @@ class AuthTokenOut(ApiModel):
 class UserOut(ApiModel):
     user_id: str
     email: str
+    
+
+class ChangePasswordIn(ApiModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def fits_bcrypt(cls, v: str) -> str:
+        if len(v.encode()) > 72:
+            raise ValueError("password must be at most 72 bytes")
+        return v
 
 
 # ---------- Catalogo de restaurantes ----------
@@ -92,12 +104,41 @@ class SpotSummaryOut(ApiModel):
     note: str
     uni_card_perk: str | None = None
     total_reviews: int
+    
+    @field_validator("rating")
+    @classmethod
+    def one_decimal(cls, v: float) -> float:
+        # En la base el promedio se guarda completo; se muestra con 1 decimal.
+        return round(v, 1)
 
 
 class SpotDetailOut(SpotSummaryOut):
     menu: list[MenuItemOut]
     reviews: list[ReviewOut]
 
+
+class ReviewIn(ApiModel):
+    stars: int = Field(ge=1, le=5)
+    text: str = Field(default="", max_length=500)
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def strip_text(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+
+class ReviewCreatedOut(ApiModel):
+    spot_id: str
+    stars: int
+    text: str
+    rating: float
+    total_reviews: int
+
+    @field_validator("rating")
+    @classmethod
+    def one_decimal(cls, v: float) -> float:
+        return round(v, 1)
+    
 
 # ---------- Favoritos (BQ5) ----------
 
@@ -216,3 +257,19 @@ class MonthlyActiveFavoritersReport(ApiModel):
     months: int
     tz_offset_minutes: int
     by_month: list[MonthlyFavoriters]  # un elemento por mes de la ventana, del mas antiguo al actual (0 si no hubo)
+
+
+# ---------- BQ10: uso de la calificacion desde la pagina del restaurante ----------
+
+class MonthlyRatingUsage(ApiModel):
+    month: str                 # 'YYYY-MM' en hora local del campus
+    viewers: int               # usuarios distintos que abrieron al menos una pagina de restaurante en el mes
+    raters: int                # de esos, cuantos publicaron al menos una calificacion en el mismo mes
+    rating_usage_percentage: float
+
+
+class RatingUsageReport(ApiModel):
+    question: str
+    months: int
+    tz_offset_minutes: int
+    by_month: list[MonthlyRatingUsage]  # un elemento por mes de la ventana, del mas antiguo al actual (0 si no hubo)

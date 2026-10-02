@@ -1,4 +1,4 @@
-"""Servicio de autenticacion: hash de contrasenas (bcrypt) y tokens de acceso (JWT HS256)."""
+"""Servicio de autenticacion: hash de contraseñas (bcrypt) y tokens de acceso (JWT HS256)."""
 from datetime import datetime, timedelta, timezone
 from functools import cache, cached_property
 
@@ -10,7 +10,7 @@ from app.repositories.users_repository import UsersRepository
 from app.schemas import AuthTokenOut
 
 ALGORITHM = "HS256"
-# bcrypt solo usa los primeros 72 bytes; contrasenas mas largas se rechazan en el registro.
+# bcrypt solo usa los primeros 72 bytes; contraseñas mas largas se rechazan en el registro.
 MAX_PASSWORD_BYTES = 72
 
 
@@ -26,9 +26,17 @@ class InvalidToken(Exception):
     pass
 
 
+class WrongCurrentPassword(Exception):
+    pass
+
+
+class SamePassword(Exception):
+    pass
+
+
 @cache
 def _dummy_hash() -> str:
-    """Hash de referencia para que un email inexistente tarde lo mismo que una contrasena incorrecta."""
+    """Hash de referencia para que un email inexistente tarde lo mismo que una contraseña incorrecta."""
     return bcrypt.hashpw(b"campusbites-dummy", bcrypt.gensalt()).decode()
 
 
@@ -69,7 +77,8 @@ class AuthService:
     def issue_token(self, user: dict, now: datetime | None = None) -> AuthTokenOut:
         now = now or datetime.now(timezone.utc)
         expires_at = now + timedelta(minutes=settings.jwt_expire_minutes)
-        token = jwt.encode({"sub": user["id"], "iat": now, "exp": expires_at}, self._secret, algorithm=ALGORITHM)
+        claims = {"sub": user["id"], "ver": user.get("token_version", 0), "iat": now, "exp": expires_at}
+        token = jwt.encode(claims, self._secret, algorithm=ALGORITHM)
         return AuthTokenOut(user_id=user["id"], email=user["email"], access_token=token,
                             expires_in=settings.jwt_expire_minutes * 60, expires_at=expires_at)
 
@@ -79,6 +88,20 @@ class AuthService:
             claims = jwt.decode(token, self._secret, algorithms=[ALGORITHM], options={"require": ["sub", "exp"]})
         except jwt.PyJWTError as e:
             raise InvalidToken(str(e)) from e
-        if not self.repo.exists(claims["sub"]):
+        current = self.repo.token_version(claims["sub"])
+        if current is None:
             raise InvalidToken("user no longer exists")
+        # Los tokens emitidos antes de que existiera "ver" cuentan como version 0.
+        if claims.get("ver", 0) != current:
+            raise InvalidToken("password was changed")
         return claims["sub"]
+    
+    def change_password(self, user_id: str, current_password: str, new_password: str) -> AuthTokenOut:
+        """Cambia la contrasena de un usuario autenticado y devuelve un token nuevo."""
+        user = self.repo.get_credentials(user_id)
+        if user is None or not verify_password(current_password, user["password_hash"]):
+            raise WrongCurrentPassword()
+        if current_password == new_password:
+            raise SamePassword()
+        user["token_version"] = self.repo.update_password(user_id, hash_password(new_password))
+        return self.issue_token(user)

@@ -125,6 +125,27 @@ class TelemetryRepository:
             params,
         ).fetchall()
 
+    def rating_usage_by_month(self, tz_offset_minutes: int, first_month: str, last_month: str,
+                              platform: str | None = None) -> list[sqlite3.Row]:
+        """BQ10: por mes local, usuarios que vieron una pagina de restaurante y cuantos de ellos calificaron."""
+        view_month = "strftime('%Y-%m', occurred_at, ? || ' minutes')"
+        review_month = "strftime('%Y-%m', created_at, ? || ' minutes')"
+        view_clauses = ["screen = ?", "user_id IS NOT NULL", f"{view_month} BETWEEN ? AND ?"]
+        params: list = [str(tz_offset_minutes), RESTAURANT_SCREEN, str(tz_offset_minutes), first_month, last_month]
+        if platform:
+            view_clauses.append("platform = ?")
+            params.append(platform)
+        params.append(str(tz_offset_minutes))
+        return self.conn.execute(
+            f"WITH viewers AS (SELECT DISTINCT {view_month} AS month, user_id FROM page_load_events "
+            f"                 WHERE {' AND '.join(view_clauses)}), "
+            f"     raters AS (SELECT DISTINCT {review_month} AS month, user_id FROM reviews WHERE user_id IS NOT NULL) "
+            "SELECT v.month AS month, COUNT(*) AS viewers, COUNT(r.user_id) AS raters "
+            "FROM viewers v LEFT JOIN raters r ON r.month = v.month AND r.user_id = v.user_id "
+            "GROUP BY v.month ORDER BY v.month",
+            params,
+        ).fetchall()
+        
     def failures_by_error_type(self, **filters) -> list[sqlite3.Row]:
         """Reparte las fallas por tipo de error; el porcentaje es sobre el total de intentos."""
         where, params = self._where(only_success=False, **filters)

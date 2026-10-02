@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from app.config import settings
 from app.db import get_conn
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import FailedRequestsReport, MonthlyActiveFavoritersReport, SlowLoadsReport, SpotViewsByHourReport
+from app.schemas import (FailedRequestsReport, MonthlyActiveFavoritersReport, RatingUsageReport, SlowLoadsReport, SpotViewsByHourReport)
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
@@ -63,3 +63,14 @@ def monthly_active_favoriters(
 ):
     """BQ7: usuarios distintos que agregan al menos un restaurante a favoritos en cada mes."""
     return service.monthly_active_favoriters(months=months, tz_offset_minutes=tz_offset_minutes, platform=platform)
+
+
+@router.get("/rating-usage", response_model=RatingUsageReport)
+def rating_usage(
+    months: int = Query(6, ge=1, le=36, description="Meses calendario hacia atras, incluido el actual"),
+    tz_offset_minutes: int = Query(settings.campus_tz_offset_minutes, alias="tzOffsetMinutes", ge=-840, le=840),
+    platform: str | None = Query(None, description="Filtra las vistas por app: android-kotlin, flutter, ..."),
+    service: AnalyticsService = Depends(get_service),
+):
+    """BQ10 (tipo 3): % de usuarios que, habiendo visto paginas de restaurantes en el mes, publicaron una calificacion."""
+    return service.rating_usage(months=months, tz_offset_minutes=tz_offset_minutes, platform=platform)

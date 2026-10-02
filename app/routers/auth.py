@@ -2,9 +2,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.repositories.users_repository import UsersRepository
-from app.schemas import AuthTokenOut, LoginIn, SignupIn, UserOut
+from app.schemas import AuthTokenOut, ChangePasswordIn, LoginIn, SignupIn, UserOut
 from app.security import get_auth_service, get_users_repo, require_user_id, unauthorized
-from app.services.auth_service import AuthService, EmailTaken, InvalidCredentials
+from app.services.auth_service import (AuthService, EmailTaken, InvalidCredentials, SamePassword, WrongCurrentPassword)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -30,3 +30,16 @@ def me(user_id: str = Depends(require_user_id), users: UsersRepository = Depends
     """Para que el cliente compruebe al abrir la app si el token guardado sigue valido."""
     user = users.get_by_id(user_id)
     return UserOut(user_id=user["id"], email=user["email"])
+
+
+@router.post("/change-password", response_model=AuthTokenOut)
+def change_password(body: ChangePasswordIn, user_id: str = Depends(require_user_id),
+                    service: AuthService = Depends(get_auth_service)):
+    """Cambia la contrasena del usuario del token. Devuelve un token nuevo; los anteriores dejan de servir."""
+    try:
+        return service.change_password(user_id, body.current_password, body.new_password)
+    except WrongCurrentPassword:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    except SamePassword:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="New password must be different from the current one")
