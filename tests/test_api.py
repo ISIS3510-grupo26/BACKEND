@@ -167,3 +167,83 @@ def test_existing_db_gets_location_and_opening_hours(tmp_path):
                          "WHERE spot_id = 'el-vagon-street-food' ORDER BY day_of_week").fetchall()
     conn.close()
     assert vagon == [(d, "17:00", "02:00") for d in range(6)]
+
+
+# ---------- BQ5: favoritos abiertos y a <= 15 min caminando ----------
+
+NITRO = {"lat": 4.6019, "lng": -74.0658}  # parado en Nitro Coffee (coordenadas del seed)
+
+
+@pytest.fixture
+def at_time():
+    """Fija el "ahora" del servidor (UTC). Bogota = UTC-5."""
+    from datetime import datetime
+    from app.routers import users
+
+    def set_now(iso_utc: str):
+        app.dependency_overrides[users.current_time] = lambda: datetime.fromisoformat(iso_utc)
+    yield set_now
+    app.dependency_overrides.clear()
+
+
+def save(client, user, *spots):
+    for s in spots:
+        assert client.put(f"/api/v1/users/{user}/favorites/{s}").status_code == 204
+
+
+def test_favorites_crud(client):
+    save(client, "ana", "nitro-coffee", "green-bowl-co")
+    save(client, "ana", "nitro-coffee")                                     # idempotente
+    assert client.put("/api/v1/users/ana/favorites/nope").status_code == 404
+    assert [s["id"] for s in client.get("/api/v1/users/ana/favorites").json()] == ["nitro-coffee", "green-bowl-co"]
+
+    assert client.delete("/api/v1/users/ana/favorites/nitro-coffee").status_code == 204
+    assert client.delete("/api/v1/users/ana/favorites/nitro-coffee").status_code == 204  # idempotente
+    assert [s["id"] for s in client.get("/api/v1/users/ana/favorites").json()] == ["green-bowl-co"]
+    assert client.get("/api/v1/users/otro/favorites").json() == []
+
+
+def test_nearby_favorites_open_now_sorted_by_walk(client, at_time):
+    save(client, "ana", "taqueria-la-esquina", "conda-de-bons", "nitro-coffee", "green-bowl-co", "el-vagon-street-food")
+    save(client, "beto", "la-esquina-burger-lab")
+    at_time("2026-09-30T17:00:00+00:00")  # miercoles 12:00 en Bogota: El Vagon (17:00-02:00) esta cerrado
+
+    r = client.get("/api/v1/users/ana/favorites/nearby", params={**NITRO, "maxWalkMinutes": 15})
+    assert r.status_code == 200
+    body = r.json()
+    assert [f["id"] for f in body] == ["nitro-coffee", "green-bowl-co", "conda-de-bons", "taqueria-la-esquina"]
+    assert set(body[0]) == {"id", "name", "emoji", "distanceMeters", "walkMinutes", "closesAt"}
+    assert body[0]["distanceMeters"] == 0 and body[0]["walkMinutes"] == 0.0
+    assert [f["walkMinutes"] for f in body] == sorted(f["walkMinutes"] for f in body)
+    green = body[1]  # ~95 m en linea recta -> ~1.2 min a 80 m/min
+    assert 85 <= green["distanceMeters"] <= 105 and green["walkMinutes"] == round(green["distanceMeters"] / 80, 1)
+    assert body[3]["closesAt"] == "22:00"  # la taqueria abre justo a las 12:00
+
+    near = client.get("/api/v1/users/ana/favorites/nearby", params={**NITRO, "maxWalkMinutes": 1}).json()
+    assert [f["id"] for f in near] == ["nitro-coffee"]
+
+
+def test_nearby_favorites_overnight_hours(client, at_time):
+    save(client, "ana", "el-vagon-street-food", "nitro-coffee")
+    at_time("2026-10-03T06:30:00+00:00")  # sabado 01:30 en Bogota: sigue abierta la franja del viernes 17:00-02:00
+    r = client.get("/api/v1/users/ana/favorites/nearby", params=NITRO).json()
+    assert [(f["id"], f["closesAt"]) for f in r] == [("el-vagon-street-food", "02:00")]
+
+    at_time("2026-10-05T06:30:00+00:00")  # lunes 01:30: el domingo no abre, nada abierto
+    assert client.get("/api/v1/users/ana/favorites/nearby", params=NITRO).json() == []
+
+    # La zona horaria es configurable como en la BQ3: 06:30 UTC es sabado 06:30 en UTC+0 -> todo cerrado.
+    at_time("2026-10-03T06:30:00+00:00")
+    assert client.get("/api/v1/users/ana/favorites/nearby", params={**NITRO, "tzOffsetMinutes": 0}).json() == []
+
+
+def test_nearby_favorites_validation(client):
+    assert client.get("/api/v1/users/ana/favorites/nearby", params={"lat": 4.6}).status_code == 422
+    assert client.get("/api/v1/users/ana/favorites/nearby", params={"lat": 91, "lng": 0}).status_code == 422
+    assert client.get("/api/v1/users/sin-favoritos/favorites/nearby", params=NITRO).json() == []
+
+
+def test_haversine_and_walking_speed():
+    from app.services.favorites_service import WALKING_SPEED_M_PER_MIN, haversine_m
+    assert haversine_m(0, 0, 1, 0) == pytest.approx(111_195, rel=1e-3)  # 1 grado de latitud
+    assert WALKING_SPEED_M_PER_MIN * 15 == 1200                          # 15 min ~ 1,2 km

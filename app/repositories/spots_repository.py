@@ -27,6 +27,15 @@ class SpotsRepository:
         rows = self.conn.execute(f"SELECT {', '.join(_SPOT_COLUMNS)} FROM spots ORDER BY rowid").fetchall()
         return [_row_to_dict(r) for r in rows]
 
+    def list_favorite_spots(self, user_id: str) -> list[dict]:
+        """Restaurantes guardados por el usuario, en el orden en que los guardo."""
+        rows = self.conn.execute(
+            f"SELECT {', '.join('s.' + c for c in _SPOT_COLUMNS)} FROM favorites f JOIN spots s ON s.id = f.spot_id "
+            "WHERE f.user_id = ? ORDER BY f.rowid",
+            (user_id,),
+        ).fetchall()
+        return [_row_to_dict(r) for r in rows]
+
     def get_spot(self, spot_id: str) -> dict | None:
         row = self.conn.execute(
             f"SELECT {', '.join(_SPOT_COLUMNS)} FROM spots WHERE id = ?", (spot_id,)

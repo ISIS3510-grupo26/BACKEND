@@ -8,6 +8,7 @@ Sirve el catálogo de restaurantes y recibe la telemetría con la que se respond
 | BQ1 | What is the percentage of restaurant page loads that take more than 3 seconds? By device and OS | `GET /api/v1/analytics/slow-page-loads?thresholdMs=3000` |
 | BQ2 | What is the percentage of failed requests when loading the restaurant's information? | `GET /api/v1/analytics/failed-requests` |
 | BQ3 | Which restaurants receive the highest number of page views and searches during each hour? | `GET /api/v1/analytics/spot-views-by-hour` |
+| BQ5 | Which restaurants in the user's favorites are open now and within a 15-minute walk? | `GET /api/v1/users/{userId}/favorites/nearby?lat=&lng=&maxWalkMinutes=15` |
 
 BQ1 y BQ2 son de **tipo 1** (rendimiento técnico de la app). BQ3 es de **tipo 4** (comportamiento de uso por hora);
 además de responderse en el endpoint, su resultado se muestra al usuario como la sección **"Popular right now"** del feed
@@ -17,6 +18,10 @@ BQ1 y BQ2 aceptan filtros opcionales `since`, `until` (ISO-8601) y `platform` (`
 BQ3 acepta `platform`, `days` (ventana hacia atrás, por defecto 7), `limit` (restaurantes por hora, por defecto 5),
 `hour` (0–23: devuelve solo esa hora; la app manda la hora local del celular) y `tzOffsetMinutes`
 (por defecto `-300`, Bogotá; configurable con `CAMPUS_TZ_OFFSET_MINUTES`).
+
+BQ5 es una feature para el usuario (filtro "Open • ≤15 min" de *Saved* en el front Flutter): la app manda su ubicación y
+el servidor decide qué favoritos están abiertos y a cuántos minutos caminando. **Todavía no hay autenticación**: el
+`userId` de la ruta es el identificador que manda el cliente (en Flutter, `--dart-define=DEV_USER_ID=<id>`).
 
 ## Correr
 
@@ -47,6 +52,10 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | GET | `/api/v1/analytics/slow-page-loads` | BQ1 |
 | GET | `/api/v1/analytics/failed-requests` | BQ2 |
 | GET | `/api/v1/analytics/spot-views-by-hour` | BQ3 (vistas + búsquedas por restaurante en cada hora) |
+| GET | `/api/v1/users/{userId}/favorites` | Restaurantes guardados por el usuario (mismo formato que `/spots`) |
+| PUT | `/api/v1/users/{userId}/favorites/{spotId}` | Guardar restaurante (idempotente, `204`; `404` si el restaurante no existe) |
+| DELETE | `/api/v1/users/{userId}/favorites/{spotId}` | Quitar de guardados (idempotente, `204`) |
+| GET | `/api/v1/users/{userId}/favorites/nearby` | BQ5 (favoritos abiertos ahora y a ≤ `maxWalkMinutes` caminando) |
 | GET | `/health` | Health check |
 
 Contrato del evento de telemetría (cualquier front debe enviarlo igual):
@@ -72,6 +81,12 @@ Contrato del evento de telemetría (cualquier front debe enviarlo igual):
   `screen=search` con `spotId`, que la app envía cuando el usuario escribe en el buscador y elige ese restaurante
   (`durationMs=0`, `success=true`). Se agrupan por restaurante y por **hora local** (`occurredAt` UTC desplazado con
   `tzOffsetMinutes`) y se ordenan por `pageViews + searches`. BQ1/BQ2 ignoran los eventos `search`.
+- BQ5 parte de los favoritos del usuario (tabla `favorites`). *Abierto ahora* = alguna franja de `spot_opening_hours`
+  cubre la hora local (`now` UTC + `tzOffsetMinutes`, por defecto Bogotá); una franja con `closes_at <= opens_at` cruza
+  la medianoche (El Vagón, 17:00–02:00, sigue abierto el sábado a la 01:30). *Distancia* = Haversine en línea recta
+  desde `lat`/`lng`. *Minutos caminando* = metros / **80 m/min** (4,8 km/h, `WALKING_SPEED_M_PER_MIN`); como es línea
+  recta, la caminata real puede ser algo mayor. Se descartan los que superan `maxWalkMinutes` (por defecto 15, máx. 120)
+  y se ordena del más cercano al más lejano. Coordenadas y horarios del seed son **datos de ejemplo** alrededor de Uniandes.
 
 Evento de búsqueda (mismo endpoint y contrato):
 
@@ -79,6 +94,14 @@ Evento de búsqueda (mismo endpoint y contrato):
 { "eventId": "uuid", "screen": "search", "spotId": "nitro-coffee", "durationMs": 0, "success": true,
   "httpStatus": null, "errorType": null, "deviceModel": "...", "osName": "Android", "osVersion": "14",
   "platform": "android-kotlin", "appVersion": "1.0", "sessionId": "uuid", "occurredAt": "2026-10-01T17:04:05.123Z" }
+```
+
+Ejemplo de respuesta de BQ5 (`GET /api/v1/users/ana/favorites/nearby?lat=4.6019&lng=-74.0658&maxWalkMinutes=15`;
+es un **arreglo** sin envoltorio, como lo espera el front Flutter; un usuario sin favoritos recibe `[]`):
+
+```json
+[ { "id": "nitro-coffee", "name": "Nitro Coffee & Brew", "emoji": "☕", "distanceMeters": 0, "walkMinutes": 0.0, "closesAt": "19:00" },
+  { "id": "green-bowl-co", "name": "Green Bowl Co.", "emoji": "🥗", "distanceMeters": 95, "walkMinutes": 1.2, "closesAt": "20:00" } ]
 ```
 
 Ejemplo de respuesta de BQ3 (`?hour=12&limit=2`; sin `hour` devuelve una entrada por cada hora con actividad):
@@ -107,10 +130,13 @@ Arquitectura **cliente-servidor por capas**:
 └───────────────┬─────────────────────────────────────┘
                 │ HTTP/REST + JSON (camelCase, /api/v1)
 ┌───────────────▼──────────── Backend (FastAPI) ──────┐
-│ Routers      spots · telemetry · analytics          │  ← capa de presentación (API)
+│ Routers      spots · telemetry · analytics · users  │  ← capa de presentación (API)
 │ Services     AnalyticsService (BQ1, BQ2, BQ3)       │  ← lógica de negocio / motor de analítica
+│              FavoritesService (BQ5)                 │
 │ Repositories SpotsRepository · TelemetryRepository  │  ← acceso a datos
+│              FavoritesRepository                    │
 │ SQLite       spots, menu_items, reviews,            │  ← persistencia centralizada
+│              spot_opening_hours, favorites,         │
 │              page_load_events                       │
 └─────────────────────────────────────────────────────┘
 ```

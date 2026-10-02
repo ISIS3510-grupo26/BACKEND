@@ -58,6 +58,17 @@ class SpotDetailOut(SpotSummaryOut):
     reviews: list[ReviewOut]
 
 
+# ---------- Favoritos (BQ5) ----------
+
+class NearbyFavoriteOut(ApiModel):
+    id: str
+    name: str
+    emoji: str
+    distance_meters: int       # en linea recta (Haversine) desde la ubicacion del usuario
+    walk_minutes: float        # distance_meters / velocidad de caminata, 1 decimal (la app redondea hacia arriba)
+    closes_at: str             # 'HH:MM' hora local en que cierra la franja abierta actual
+
+
 # ---------- Telemetria ----------
 
 class PageLoadEventIn(ApiModel):

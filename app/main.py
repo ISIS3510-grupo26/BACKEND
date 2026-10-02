@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import connect, init_db
 from app.repositories.spots_repository import SpotsRepository
-from app.routers import analytics, spots, telemetry
+from app.routers import analytics, spots, telemetry, users
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 app.include_router(spots.router)
 app.include_router(telemetry.router)
 app.include_router(analytics.router)
+app.include_router(users.router)
 
 
 @app.get("/health", tags=["health"])
