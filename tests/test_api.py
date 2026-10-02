@@ -333,3 +333,84 @@ def test_favorite_events_do_not_affect_other_bqs(client):
     totals = (sum(h["totalPageViews"] for h in r["hours"]), sum(h["totalSearches"] for h in r["hours"]))
     assert totals == (1, 0)  # solo la carga del restaurante; el favorito no es vista ni busqueda
 
+# ---------- Autenticacion ----------
+
+def signup(client, email="ana@uniandes.edu.co", password="segura123"):
+    r = client.post("/api/v1/auth/signup", json={"email": email, "password": password})
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def bearer(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_signup_and_login(client):
+    from datetime import datetime
+    s = signup(client, email="  Ana@Uniandes.edu.co ")
+    assert set(s) == {"userId", "email", "accessToken", "tokenType", "expiresIn", "expiresAt"}
+    assert (s["email"], s["tokenType"], s["expiresIn"]) == ("ana@uniandes.edu.co", "bearer", 7 * 24 * 3600)
+    assert datetime.fromisoformat(s["expiresAt"]).tzinfo is not None
+
+    # Email repetido (sin importar mayusculas) -> 409; datos invalidos -> 422.
+    dup = client.post("/api/v1/auth/signup", json={"email": "ANA@uniandes.edu.co", "password": "otra12345"})
+    assert dup.status_code == 409
+    assert client.post("/api/v1/auth/signup", json={"email": "no-es-email", "password": "segura123"}).status_code == 422
+    assert client.post("/api/v1/auth/signup", json={"email": "b@x.co", "password": "corta"}).status_code == 422
+    assert client.post("/api/v1/auth/signup", json={"email": "b@x.co", "password": "ñ" * 37}).status_code == 422  # 74 bytes
+
+    ok = client.post("/api/v1/auth/login", json={"email": "ana@uniandes.edu.co", "password": "segura123"})
+    assert ok.status_code == 200 and ok.json()["userId"] == s["userId"]
+    for wrong in ({"email": "ana@uniandes.edu.co", "password": "incorrecta"},
+                  {"email": "nadie@uniandes.edu.co", "password": "segura123"}):
+        r = client.post("/api/v1/auth/login", json=wrong)
+        assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
+        assert r.json()["detail"] == "Invalid email or password"  # no revela si el email existe
+
+    me = client.get("/api/v1/auth/me", headers=bearer(ok.json()["accessToken"]))
+    assert me.json() == {"userId": s["userId"], "email": "ana@uniandes.edu.co"}
+    assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_password_is_hashed(client):
+    import sqlite3
+    signup(client)
+    conn = sqlite3.connect(settings.db_path)
+    stored = conn.execute("SELECT password_hash FROM users").fetchone()[0]
+    conn.close()
+    assert stored.startswith("$2") and "segura123" not in stored
+
+
+def test_token_validation(client):
+    from datetime import datetime, timedelta, timezone
+    import jwt
+    from app.db import connect
+    from app.repositories.users_repository import UsersRepository
+    from app.services.auth_service import AuthService
+    s = signup(client)
+    user = {"id": s["userId"], "email": s["email"]}
+
+    assert client.get("/api/v1/auth/me", headers=bearer(s["accessToken"])).status_code == 200
+    conn = connect()
+    service = AuthService(UsersRepository(conn))
+    expired = service.issue_token(user, now=datetime.now(timezone.utc) - timedelta(days=8)).access_token
+    conn.close()
+    forged = jwt.encode({"sub": s["userId"], "exp": datetime.now(timezone.utc) + timedelta(days=1)}, "otro-secreto-de-al-menos-32-bytes!!",
+                        algorithm="HS256")
+    for headers in (bearer(expired), bearer(forged), bearer("no.es.jwt"), {"Authorization": "Bearer "},
+                    {"Authorization": f"Basic {s['accessToken']}"}, {"Authorization": s["accessToken"]}):
+        r = client.get("/api/v1/auth/me", headers=headers)
+        assert r.status_code == 401, headers
+
+    # Token valido de una cuenta que ya no existe.
+    import sqlite3
+    conn = sqlite3.connect(settings.db_path)
+    conn.execute("DELETE FROM users"); conn.commit(); conn.close()
+    assert client.get("/api/v1/auth/me", headers=bearer(s["accessToken"])).status_code == 401
+
+
+def test_token_survives_restart(client):
+    # Sin JWT_SECRET el secreto se genera una vez y queda en la base: reiniciar el servidor no invalida sesiones.
+    s = signup(client)
+    with TestClient(app) as restarted:
+        assert restarted.get("/api/v1/auth/me", headers=bearer(s["accessToken"])).status_code == 200

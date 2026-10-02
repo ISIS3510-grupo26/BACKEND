@@ -1,5 +1,6 @@
 """Capa de persistencia: conexion SQLite y esquema."""
 import os
+import secrets
 import sqlite3
 from collections.abc import Iterator
 
@@ -53,6 +54,21 @@ CREATE TABLE IF NOT EXISTS reviews (
     text          TEXT NOT NULL,
     dined_ago     TEXT NOT NULL,
     helpful_count INTEGER NOT NULL DEFAULT 0
+);
+
+-- Cuentas de usuario. id es un uuid generado por el servidor: es el mismo userId de favorites y de la telemetria.
+CREATE TABLE IF NOT EXISTS users (
+    id            TEXT PRIMARY KEY,
+    email         TEXT NOT NULL UNIQUE,        -- normalizado: sin espacios y en minusculas
+    password_hash TEXT NOT NULL,               -- bcrypt; nunca la contrasena en texto plano
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- Valores internos del servidor. jwt_secret firma los tokens cuando no se configura JWT_SECRET: vive con la base,
+-- asi los tokens sobreviven reinicios y no hay un secreto en el repositorio ni en otro archivo.
+CREATE TABLE IF NOT EXISTS app_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 
 -- Horario semanal en hora local del campus. day_of_week: 0 = lunes ... 6 = domingo (datetime.weekday()).
@@ -125,6 +141,7 @@ def init_db(conn: sqlite3.Connection) -> None:
         for name, sql_type in columns:
             if name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}")
+    conn.execute("INSERT OR IGNORE INTO app_meta (key, value) VALUES ('jwt_secret', ?)", (secrets.token_hex(32),))
     conn.commit()
 
 

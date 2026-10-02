@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import connect, init_db
 from app.repositories.spots_repository import SpotsRepository
-from app.routers import analytics, spots, telemetry, users
+from app.routers import analytics, auth, spots, telemetry, users
 
 
 @asynccontextmanager
@@ -25,6 +25,7 @@ app = FastAPI(title="CampusBites API", version="1.0.0", lifespan=lifespan)
 # El mismo backend sirve a varios fronts (Android/Kotlin y el otro cliente, que puede ser web).
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+app.include_router(auth.router)
 app.include_router(spots.router)
 app.include_router(telemetry.router)
 app.include_router(analytics.router)

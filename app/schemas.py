@@ -2,12 +2,53 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 
 class ApiModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+# ---------- Autenticacion ----------
+
+class CredentialsIn(ApiModel):
+    email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, v):
+        return v.strip().lower() if isinstance(v, str) else v
+
+
+class SignupIn(CredentialsIn):
+    password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("password")
+    @classmethod
+    def fits_bcrypt(cls, v: str) -> str:
+        if len(v.encode()) > 72:  # bcrypt ignora lo que pase de 72 bytes: mejor rechazarlo que truncarlo
+            raise ValueError("password must be at most 72 bytes")
+        return v
+
+
+class LoginIn(CredentialsIn):
+    pass
+
+
+class AuthTokenOut(ApiModel):
+    user_id: str               # el userId de /users/{userId}/... y de la telemetria
+    email: str
+    access_token: str          # JWT; se manda como "Authorization: Bearer <accessToken>"
+    token_type: str = "bearer"
+    expires_in: int            # segundos de vigencia
+    expires_at: datetime       # UTC
+
+
+class UserOut(ApiModel):
+    user_id: str
+    email: str
 
 
 # ---------- Catalogo de restaurantes ----------
