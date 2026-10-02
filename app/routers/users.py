@@ -14,9 +14,10 @@ from app.db import get_conn
 from app.repositories.favorites_repository import FavoritesRepository
 from app.repositories.spots_repository import SpotsRepository
 from app.repositories.users_repository import UsersRepository
-from app.schemas import NearbyFavoriteOut, SpotSummaryOut
+from app.schemas import NearbyFavoriteOut, NearbyPickOut, SpotSummaryOut
 from app.security import get_users_repo, optional_user_id, resolve_acting_user
 from app.services.favorites_service import FavoritesService
+from app.services.recommendations_service import RecommendationsService
 
 router = APIRouter(prefix="/api/v1/users", tags=["favorites"])
 
@@ -71,3 +72,16 @@ def open_nearby_favorites(
 ):
     """BQ5: restaurantes favoritos del usuario abiertos ahora y a <= maxWalkMinutes caminando desde (lat, lng)."""
     return FavoritesService(repo).open_nearby(user_id, lat, lng, max_walk_minutes, tz_offset_minutes, now=now)
+
+
+@router.get("/{user_id}/recommendations/nearby", response_model=list[NearbyPickOut])
+def nearby_recommendations(
+    user_id: AuthorizedUserId,
+    lat: float = Query(ge=-90, le=90),
+    lng: float = Query(ge=-180, le=180),
+    max_walk_minutes: int = Query(15, alias="maxWalkMinutes", ge=1, le=120),
+    limit: int = Query(5, ge=1, le=20),
+    conn: sqlite3.Connection = Depends(get_conn),
+):
+    """BQ3: los mejor calificados a <= maxWalkMinutes de (lat, lng) que el usuario todavia no ha probado."""
+    return RecommendationsService(SpotsRepository(conn)).nearby_untried(user_id, lat, lng, max_walk_minutes, limit)

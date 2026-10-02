@@ -151,6 +151,24 @@ class NearbyFavoriteOut(ApiModel):
     closes_at: str             # 'HH:MM' hora local en que cierra la franja abierta actual
 
 
+# ---------- Recomendaciones (BQ3) ----------
+
+class NearbyPickOut(ApiModel):
+    id: str
+    name: str
+    emoji: str
+    rating: float              # promedio actual, ya con las resenas de los usuarios
+    latitude: float            # el front dibuja el pin del mapa aqui
+    longitude: float
+    distance_meters: int       # en linea recta (Haversine) desde la ubicacion del usuario
+    walk_minutes: float        # distance_meters / velocidad de caminata, 1 decimal (la app redondea hacia arriba)
+
+    @field_validator("rating")
+    @classmethod
+    def one_decimal(cls, v: float) -> float:
+        return round(v, 1)
+
+
 # ---------- Telemetria ----------
 
 class PageLoadEventIn(ApiModel):

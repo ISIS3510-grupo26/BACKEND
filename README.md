@@ -8,9 +8,13 @@ Sirve el catálogo de restaurantes y recibe la telemetría con la que se respond
 | BQ1 | What is the percentage of restaurant page loads that take more than 3 seconds? By device and OS | `GET /api/v1/analytics/slow-page-loads?thresholdMs=3000` |
 | BQ2 | What is the percentage of failed requests when loading the restaurant's information? | `GET /api/v1/analytics/failed-requests` |
 | BQ3 | Which restaurants receive the highest number of page views and searches during each hour? | `GET /api/v1/analytics/spot-views-by-hour` |
+| BQ3 | What are the nearest restaurants with the highest average rating that the user hasn't tried yet? | `GET /api/v1/users/{userId}/recommendations/nearby?lat=&lng=&maxWalkMinutes=15&limit=5` |
 | BQ5 | Which restaurants in the user's favorites are open now and within a 15-minute walk? | `GET /api/v1/users/{userId}/favorites/nearby?lat=&lng=&maxWalkMinutes=15` |
 | BQ7 | How many active users add one or more restaurants to their favorites each month? | `GET /api/v1/analytics/monthly-active-favoriters` |
 | BQ10 | What percentage of users use the restaurant rating feature when looking at a restaurant's page? | `GET /api/v1/analytics/rating-usage?months=6` |
+
+> **Nota de numeración:** hay dos preguntas marcadas BQ3, la de vistas por hora (telemetría) y la de
+> recomendaciones cercanas (feature de la *Taste Map*). Falta confirmar con el equipo cuál conserva el número.
 
 BQ1 y BQ2 son de **tipo 1** (rendimiento técnico de la app). BQ3 es de **tipo 4** (comportamiento de uso por hora);
 además de responderse en el endpoint, su resultado se muestra al usuario como la sección **"Popular right now"** del feed
@@ -24,6 +28,11 @@ BQ3 acepta `platform`, `days` (ventana hacia atrás, por defecto 7), `limit` (re
 BQ5 es una feature para el usuario (filtro "Open • ≤15 min" de *Saved* en el front Flutter): la app manda su ubicación y
 el servidor decide qué favoritos están abiertos y a cuántos minutos caminando. El `userId` de la ruta es el de la
 sesión (ver [Autenticación](#autenticación)); sin sesión se acepta un id de desarrollo (`--dart-define=DEV_USER_ID=<id>`).
+
+BQ3 (recomendaciones) es la otra feature para el usuario: alimenta la pantalla *Taste Map* del front Flutter.
+La app manda su ubicación y el servidor devuelve los restaurantes mejor calificados que quedan a una caminata
+corta y que el usuario **todavía no ha probado**. Acepta `maxWalkMinutes` (por defecto 15, de 1 a 120) y
+`limit` (por defecto 5, de 1 a 20). El `userId` de la ruta es el de la sesión, igual que en la BQ5.
 
 BQ7 acepta `months` (meses calendario hacia atrás incluido el actual, por defecto 12, máx. 36), `tzOffsetMinutes` y
 `platform`. Cuenta el `userId` de cada evento: el del token si la petición está autenticada; los ids de desarrollo
@@ -72,6 +81,7 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | PUT | `/api/v1/users/{userId}/favorites/{spotId}` | Guardar restaurante (idempotente, `204`; `404` si el restaurante no existe) |
 | DELETE | `/api/v1/users/{userId}/favorites/{spotId}` | Quitar de guardados (idempotente, `204`) |
 | GET | `/api/v1/users/{userId}/favorites/nearby` | BQ5 (favoritos abiertos ahora y a ≤ `maxWalkMinutes` caminando) |
+| GET | `/api/v1/users/{userId}/recommendations/nearby` | BQ3 (mejor calificados a ≤ `maxWalkMinutes` caminando que el usuario no ha probado) |
 | GET | `/health` | Health check |
 
 ### Autenticación
@@ -128,6 +138,14 @@ Contrato del evento de telemetría (cualquier front debe enviarlo igual):
   desde `lat`/`lng`. *Minutos caminando* = metros / **80 m/min** (4,8 km/h, `WALKING_SPEED_M_PER_MIN`); como es línea
   recta, la caminata real puede ser algo mayor. Se descartan los que superan `maxWalkMinutes` (por defecto 15, máx. 120)
   y se ordena del más cercano al más lejano. Coordenadas y horarios del seed son **datos de ejemplo** alrededor de Uniandes.
+- BQ3 (recomendaciones) parte del catálogo completo, no de los favoritos. *Probado* = el usuario tiene una reseña
+  suya (`reviews.user_id`) de ese restaurante; las reseñas del catálogo (`user_id` nulo) no cuentan, así que cada
+  usuario ve su propia lista. *Rating* = el promedio actual de `spots.rating`, ya actualizado por las calificaciones
+  que publican los usuarios (BQ10). *Distancia* y *minutos caminando* se calculan igual que en la BQ5 (Haversine y
+  80 m/min, reutilizando `haversine_m` y `WALKING_SPEED_M_PER_MIN`). El orden es **rating de mayor a menor** y, entre
+  los que empatan, el más cercano; se descartan los que superan `maxWalkMinutes` y los que no tienen coordenadas.
+  Está implementado como un *pipeline* de pipes and filters (`app/services/recommendations_service.py`): cada paso
+  (`exclude_tried`, `add_distance`, `within_walk`, `rank`) recibe una lista y devuelve otra.
 - BQ7: *usuario activo que agrega favoritos* = `userId` distinto con al menos un evento `screen=favorite_added` en el
   mes calendario local (`occurredAt` desplazado con `tzOffsetMinutes`): `COUNT(DISTINCT userId)` por mes. Se reporta
   también el total de eventos del mes. Los meses sin actividad salen en `0`. BQ1/BQ2/BQ3 ignoran estos eventos.
@@ -163,6 +181,19 @@ es un **arreglo** sin envoltorio, como lo espera el front Flutter; un usuario si
 ```json
 [ { "id": "nitro-coffee", "name": "Nitro Coffee & Brew", "emoji": "☕", "distanceMeters": 0, "walkMinutes": 0.0, "closesAt": "19:00" },
   { "id": "green-bowl-co", "name": "Green Bowl Co.", "emoji": "🥗", "distanceMeters": 95, "walkMinutes": 1.2, "closesAt": "20:00" } ]
+```
+
+Ejemplo de respuesta de BQ3 recomendaciones
+(`GET /api/v1/users/ana/recommendations/nearby?lat=4.6019&lng=-74.0658&maxWalkMinutes=15&limit=3`; también es un
+**arreglo** sin envoltorio; si el usuario ya probó todos los cercanos recibe `[]`):
+
+```json
+[ { "id": "nitro-coffee", "name": "Nitro Coffee & Brew", "emoji": "☕", "rating": 5.0,
+    "latitude": 4.6019, "longitude": -74.0658, "distanceMeters": 0, "walkMinutes": 0.0 },
+  { "id": "conda-de-bons", "name": "Conda de Bons", "emoji": "🍔", "rating": 5.0,
+    "latitude": 4.6031, "longitude": -74.0662, "distanceMeters": 141, "walkMinutes": 1.8 },
+  { "id": "la-esquina-burger-lab", "name": "La Esquina Burger Lab", "emoji": "🍔", "rating": 4.8,
+    "latitude": 4.6006, "longitude": -74.0646, "distanceMeters": 196, "walkMinutes": 2.5 } ]
 ```
 
 Ejemplo de respuesta de BQ3 (`?hour=12&limit=2`; sin `hour` devuelve una entrada por cada hora con actividad):
