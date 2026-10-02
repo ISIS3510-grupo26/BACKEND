@@ -10,6 +10,8 @@ _SPOT_COLUMNS = (
     "price", "distance", "walk_minutes", "is_budget", "is_vegetarian", "is_high_protein",
     "affinity_percent", "category", "note_label", "note", "uni_card_perk", "total_reviews",
 )
+# Se escriben al sembrar pero no se exponen en /spots (las usa la BQ5 en el servidor).
+_GEO_COLUMNS = ("latitude", "longitude")
 _BOOL_COLUMNS = {"is_budget", "is_vegetarian", "is_high_protein", "is_student_pick"}
 
 
@@ -46,27 +48,41 @@ class SpotsRepository:
         ]
         return spot
 
-    def seed_if_empty(self) -> None:
-        if self.conn.execute("SELECT COUNT(*) FROM spots").fetchone()[0]:
-            return
+    def sync_catalog(self) -> None:
+        """Carga el catalogo de seed_spots.json, que es su unica fuente (la API no escribe restaurantes).
+
+        Corre en cada arranque y es idempotente: las bases nuevas quedan sembradas y las ya existentes se
+        actualizan (p. ej. coordenadas y horarios de la BQ5) sin un paso de migracion aparte. Los restaurantes
+        se actualizan con upsert, no se borran, porque favorites los referencia; menu, resenas y horarios se
+        reemplazan completos.
+        """
         spots = json.loads(SEED_FILE.read_text(encoding="utf-8"))
+        columns = (*_SPOT_COLUMNS, *_GEO_COLUMNS)
+        upsert = (
+            f"INSERT INTO spots ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))}) "
+            f"ON CONFLICT(id) DO UPDATE SET {', '.join(f'{c} = excluded.{c}' for c in columns[1:])}"
+        )
         with self.conn:
             for spot in spots:
-                self.conn.execute(
-                    f"INSERT INTO spots ({', '.join(_SPOT_COLUMNS)}) VALUES ({', '.join('?' * len(_SPOT_COLUMNS))})",
-                    [spot.get(c) for c in _SPOT_COLUMNS],
+                self.conn.execute(upsert, [spot.get(c) for c in columns])
+                for table in ("menu_items", "reviews", "spot_opening_hours"):
+                    self.conn.execute(f"DELETE FROM {table} WHERE spot_id = ?", (spot["id"],))
+                self.conn.executemany(
+                    "INSERT INTO menu_items (spot_id, position, emoji, emoji_background, name, description, price, is_student_pick) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [(spot["id"], pos, item["emoji"], item["emoji_background"], item["name"],
+                      item["description"], item["price"], item.get("is_student_pick", False))
+                     for pos, item in enumerate(spot["menu"])],
                 )
-                for pos, item in enumerate(spot["menu"]):
-                    self.conn.execute(
-                        "INSERT INTO menu_items (spot_id, position, emoji, emoji_background, name, description, price, is_student_pick) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (spot["id"], pos, item["emoji"], item["emoji_background"], item["name"],
-                         item["description"], item["price"], item.get("is_student_pick", False)),
-                    )
-                for pos, review in enumerate(spot["reviews"]):
-                    self.conn.execute(
-                        "INSERT INTO reviews (spot_id, position, author_name, initials, program, stars, text, dined_ago, helpful_count) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (spot["id"], pos, review["author_name"], review["initials"], review["program"],
-                         review["stars"], review["text"], review["dined_ago"], review["helpful_count"]),
-                    )
+                self.conn.executemany(
+                    "INSERT INTO reviews (spot_id, position, author_name, initials, program, stars, text, dined_ago, helpful_count) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [(spot["id"], pos, review["author_name"], review["initials"], review["program"],
+                      review["stars"], review["text"], review["dined_ago"], review["helpful_count"])
+                     for pos, review in enumerate(spot["reviews"])],
+                )
+                self.conn.executemany(
+                    "INSERT INTO spot_opening_hours (spot_id, day_of_week, opens_at, closes_at) VALUES (?, ?, ?, ?)",
+                    [(spot["id"], day, slot["opens"], slot["closes"])
+                     for slot in spot["opening_hours"] for day in slot["days"]],
+                )

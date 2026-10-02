@@ -10,6 +10,8 @@
     "price": "$18.500 COP",
     "distance": "5 min walk",
     "walk_minutes": 5,
+    "latitude": 4.6031,
+    "longitude": -74.0662,
     "is_budget": false,
     "is_vegetarian": false,
     "is_high_protein": true,
@@ -19,6 +21,19 @@
     "note": "Saved for 10% Engineering card discount and quick ~8 min wait.",
     "uni_card_perk": "10% off for Engineering students with UniCard.",
     "total_reviews": 31,
+    "opening_hours": [
+      {
+        "days": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "opens": "11:00",
+        "closes": "16:00"
+      }
+    ],
     "menu": [
       {
         "emoji": "🍔",
@@ -75,6 +90,8 @@
     "price": "$15.000 COP",
     "distance": "3 min walk",
     "walk_minutes": 3,
+    "latitude": 4.6014,
+    "longitude": -74.0651,
     "is_budget": true,
     "is_vegetarian": true,
     "is_high_protein": false,
@@ -83,6 +100,26 @@
     "note_label": "Student tip",
     "note": "Huge portions, free infused water refill, plenty of outlets nearby.",
     "total_reviews": 27,
+    "opening_hours": [
+      {
+        "days": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "opens": "07:00",
+        "closes": "20:00"
+      },
+      {
+        "days": [
+          5
+        ],
+        "opens": "08:00",
+        "closes": "14:00"
+      }
+    ],
     "menu": [
       {
         "emoji": "🥗",
@@ -139,6 +176,8 @@
     "price": "$6.500 COP",
     "distance": "2 min walk",
     "walk_minutes": 2,
+    "latitude": 4.6019,
+    "longitude": -74.0658,
     "is_budget": true,
     "is_vegetarian": true,
     "is_high_protein": false,
@@ -148,6 +187,26 @@
     "note": "Best espresso shots between lectures. Very fast queue (~3 min).",
     "uni_card_perk": "Free size upgrade on any coffee with UniCard.",
     "total_reviews": 52,
+    "opening_hours": [
+      {
+        "days": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "opens": "06:30",
+        "closes": "19:00"
+      },
+      {
+        "days": [
+          5
+        ],
+        "opens": "07:00",
+        "closes": "13:00"
+      }
+    ],
     "menu": [
       {
         "emoji": "☕",
@@ -195,6 +254,8 @@
     "price": "$12.000 COP",
     "distance": "6 min walk",
     "walk_minutes": 6,
+    "latitude": 4.6045,
+    "longitude": -74.067,
     "is_budget": true,
     "is_vegetarian": false,
     "is_high_protein": false,
@@ -204,6 +265,20 @@
     "note": "Combo student taco special on Tuesdays, generous extra guacamole.",
     "uni_card_perk": "Taco Tuesday combo: 3 tacos + drink for $12.000 with UniCard.",
     "total_reviews": 38,
+    "opening_hours": [
+      {
+        "days": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "opens": "12:00",
+        "closes": "22:00"
+      }
+    ],
     "menu": [
       {
         "emoji": "🌮",
@@ -251,6 +326,8 @@
     "price": "$12.000 - $22.000 COP",
     "distance": "3 min walk",
     "walk_minutes": 3,
+    "latitude": 4.6006,
+    "longitude": -74.0646,
     "is_budget": false,
     "is_vegetarian": false,
     "is_high_protein": true,
@@ -260,6 +337,19 @@
     "note": "92% of Engineering students with your budget loved their chipotle garlic sauce.",
     "uni_card_perk": "UniCard discount 10% applied automatically at register.",
     "total_reviews": 43,
+    "opening_hours": [
+      {
+        "days": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "opens": "11:00",
+        "closes": "21:00"
+      }
+    ],
     "menu": [
       {
         "emoji": "🍔",
@@ -332,6 +422,8 @@
     "price": "$9.000 - $16.000 COP",
     "distance": "5 min walk",
     "walk_minutes": 5,
+    "latitude": 4.5998,
+    "longitude": -74.0666,
     "is_budget": true,
     "is_vegetarian": true,
     "is_high_protein": false,
@@ -340,6 +432,20 @@
     "note_label": "Recommended",
     "note": "High volume order spot before 1:00 PM classes. Fast service under 4 mins.",
     "total_reviews": 22,
+    "opening_hours": [
+      {
+        "days": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "opens": "11:30",
+        "closes": "20:00"
+      }
+    ],
     "menu": [
       {
         "emoji": "🍕",
@@ -387,6 +493,8 @@
     "price": "$8.500 - $14.000 COP",
     "distance": "2 min walk",
     "walk_minutes": 2,
+    "latitude": 4.6025,
+    "longitude": -74.0647,
     "is_budget": true,
     "is_vegetarian": false,
     "is_high_protein": false,
@@ -395,6 +503,20 @@
     "note_label": "Recommended",
     "note": "Best budget combo match for students with fast break between lectures.",
     "total_reviews": 19,
+    "opening_hours": [
+      {
+        "days": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "opens": "17:00",
+        "closes": "02:00"
+      }
+    ],
     "menu": [
       {
         "emoji": "🌭",

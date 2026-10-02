@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS spots (
     price            TEXT NOT NULL,
     distance         TEXT NOT NULL,
     walk_minutes     INTEGER NOT NULL,
+    latitude         REAL,                  -- WGS84; lo usa la BQ5 para calcular la caminata real
+    longitude        REAL,
     is_budget        INTEGER NOT NULL,
     is_vegetarian    INTEGER NOT NULL,
     is_high_protein  INTEGER NOT NULL,
@@ -53,6 +55,27 @@ CREATE TABLE IF NOT EXISTS reviews (
     helpful_count INTEGER NOT NULL DEFAULT 0
 );
 
+-- Horario semanal en hora local del campus. day_of_week: 0 = lunes ... 6 = domingo (datetime.weekday()).
+-- Si closes_at <= opens_at la franja cruza la medianoche y termina al dia siguiente.
+CREATE TABLE IF NOT EXISTS spot_opening_hours (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    spot_id     TEXT NOT NULL REFERENCES spots(id),
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+    opens_at    TEXT NOT NULL,              -- 'HH:MM'
+    closes_at   TEXT NOT NULL               -- 'HH:MM'
+);
+
+CREATE INDEX IF NOT EXISTS idx_soh_spot ON spot_opening_hours(spot_id);
+
+-- Restaurantes guardados por cada usuario. user_id es el identificador que manda el cliente
+-- (todavia no hay autenticacion; cuando exista sera el id del usuario autenticado).
+CREATE TABLE IF NOT EXISTS favorites (
+    user_id    TEXT NOT NULL,
+    spot_id    TEXT NOT NULL REFERENCES spots(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (user_id, spot_id)
+);
+
 -- Un registro por cada intento de cargar la pagina de un restaurante,
 -- reportado por cualquier cliente (Android/Kotlin, el otro front, etc.).
 CREATE TABLE IF NOT EXISTS page_load_events (
@@ -77,6 +100,12 @@ CREATE TABLE IF NOT EXISTS page_load_events (
 CREATE INDEX IF NOT EXISTS idx_ple_screen_time ON page_load_events(screen, occurred_at);
 """
 
+# Columnas agregadas despues de la primera version del esquema. CREATE TABLE IF NOT EXISTS no altera
+# tablas que ya existen, asi que las bases creadas antes se actualizan aqui (idempotente).
+ADDED_COLUMNS = {
+    "spots": [("latitude", "REAL"), ("longitude", "REAL")],
+}
+
 
 def connect() -> sqlite3.Connection:
     if settings.db_path != ":memory:":
@@ -89,6 +118,11 @@ def connect() -> sqlite3.Connection:
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    for table, columns in ADDED_COLUMNS.items():
+        existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for name, sql_type in columns:
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}")
     conn.commit()
 
 

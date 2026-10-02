@@ -14,7 +14,7 @@ async def lifespan(_: FastAPI):
     conn = connect()
     try:
         init_db(conn)
-        SpotsRepository(conn).seed_if_empty()
+        SpotsRepository(conn).sync_catalog()
     finally:
         conn.close()
     yield

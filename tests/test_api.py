@@ -145,3 +145,25 @@ def test_search_events_do_not_affect_bq1_bq2(client):
     failed = client.get("/api/v1/analytics/failed-requests").json()
     assert (slow["totalLoads"], slow["slowLoads"]) == (1, 1)
     assert failed["totalRequests"] == 1
+
+
+def test_existing_db_gets_location_and_opening_hours(tmp_path):
+    # Simula una base creada antes de la BQ5: sin coordenadas ni horarios.
+    import sqlite3
+    db = str(tmp_path / "old.db")
+    object.__setattr__(settings, "db_path", db)
+    with TestClient(app):
+        pass
+    conn = sqlite3.connect(db)
+    conn.executescript("DELETE FROM spot_opening_hours; "
+                       "ALTER TABLE spots DROP COLUMN latitude; ALTER TABLE spots DROP COLUMN longitude;")
+    conn.close()
+
+    with TestClient(app) as c:
+        assert len(c.get("/api/v1/spots").json()) == 7
+    conn = sqlite3.connect(db)
+    assert conn.execute("SELECT COUNT(*) FROM spots WHERE latitude IS NULL OR longitude IS NULL").fetchone()[0] == 0
+    vagon = conn.execute("SELECT day_of_week, opens_at, closes_at FROM spot_opening_hours "
+                         "WHERE spot_id = 'el-vagon-street-food' ORDER BY day_of_week").fetchall()
+    conn.close()
+    assert vagon == [(d, "17:00", "02:00") for d in range(6)]
