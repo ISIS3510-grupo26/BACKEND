@@ -333,6 +333,7 @@ def test_favorite_events_do_not_affect_other_bqs(client):
     totals = (sum(h["totalPageViews"] for h in r["hours"]), sum(h["totalSearches"] for h in r["hours"]))
     assert totals == (1, 0)  # solo la carga del restaurante; el favorito no es vista ni busqueda
 
+
 # ---------- Autenticacion ----------
 
 def signup(client, email="ana@uniandes.edu.co", password="segura123"):
@@ -402,6 +403,9 @@ def test_token_validation(client):
         r = client.get("/api/v1/auth/me", headers=headers)
         assert r.status_code == 401, headers
 
+    # Un header invalido nunca cae al override de desarrollo, ni siquiera con un userId que no es una cuenta.
+    assert client.get("/api/v1/users/dev-user/favorites", headers=bearer(expired)).status_code == 401
+
     # Token valido de una cuenta que ya no existe.
     import sqlite3
     conn = sqlite3.connect(settings.db_path)
@@ -414,3 +418,50 @@ def test_token_survives_restart(client):
     s = signup(client)
     with TestClient(app) as restarted:
         assert restarted.get("/api/v1/auth/me", headers=bearer(s["accessToken"])).status_code == 200
+
+def test_favorites_with_token_and_dev_override(client, at_time):
+    s = signup(client)
+    me, token = s["userId"], bearer(s["accessToken"])
+
+    # Con token: solo sobre su propio userId.
+    assert client.put(f"/api/v1/users/{me}/favorites/nitro-coffee", headers=token).status_code == 204
+    assert [f["id"] for f in client.get(f"/api/v1/users/{me}/favorites", headers=token).json()] == ["nitro-coffee"]
+    assert client.put("/api/v1/users/otro/favorites/nitro-coffee", headers=token).status_code == 403
+    at_time("2026-09-30T17:00:00+00:00")  # miercoles 12:00 en Bogota
+    nearby = client.get(f"/api/v1/users/{me}/favorites/nearby", params=NITRO, headers=token)
+    assert [f["id"] for f in nearby.json()] == ["nitro-coffee"]
+
+    # Sin token no se puede usar el id de una cuenta registrada...
+    assert client.get(f"/api/v1/users/{me}/favorites").status_code == 401
+    assert client.delete(f"/api/v1/users/{me}/favorites/nitro-coffee").status_code == 401
+    assert client.get(f"/api/v1/users/{me}/favorites/nearby", params=NITRO).status_code == 401
+    # ...pero el override de desarrollo (DEV_USER_ID) sigue funcionando igual que antes.
+    save(client, "dev-camilo", "green-bowl-co")
+    assert [f["id"] for f in client.get("/api/v1/users/dev-camilo/favorites/nearby", params=NITRO).json()] == ["green-bowl-co"]
+
+
+def test_telemetry_with_token_and_dev_override(client):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    s = signup(client)
+    token = bearer(s["accessToken"])
+
+    # Con token el userId puede omitirse: se toma del token (y se asigna a todos los eventos del lote).
+    fav = favorite_event("x", "nitro-coffee", now); del fav["userId"]
+    r = client.post("/api/v1/telemetry/page-loads", json={"events": [fav, event(800)]}, headers=token)
+    assert r.json() == {"accepted": 2, "duplicates": 0}
+    same = favorite_event(s["userId"], "green-bowl-co", now)
+    assert client.post("/api/v1/telemetry/page-loads", json={"events": [same]}, headers=token).status_code == 202
+    other = favorite_event("otro", "green-bowl-co", now)
+    assert client.post("/api/v1/telemetry/page-loads", json={"events": [other]}, headers=token).status_code == 403
+
+    # Sin token: override de desarrollo, pero no a nombre de una cuenta registrada.
+    assert client.post("/api/v1/telemetry/page-loads",
+                       json={"events": [favorite_event("dev-camilo", "nitro-coffee", now)]}).status_code == 202
+    spoof = favorite_event(s["userId"], "conda-de-bons", now)
+    assert client.post("/api/v1/telemetry/page-loads", json={"events": [spoof]}).status_code == 401
+
+    # BQ7 cuenta al usuario autenticado y al de desarrollo: mismas formas de respuesta que antes.
+    r = client.get("/api/v1/analytics/monthly-active-favoriters", params={"months": 1}).json()
+    assert (r["byMonth"][0]["activeFavoriters"], r["byMonth"][0]["favoriteEvents"]) == (2, 3)
+    assert client.get("/api/v1/analytics/failed-requests").json()["totalRequests"] == 1

@@ -21,11 +21,12 @@ BQ3 acepta `platform`, `days` (ventana hacia atrás, por defecto 7), `limit` (re
 (por defecto `-300`, Bogotá; configurable con `CAMPUS_TZ_OFFSET_MINUTES`).
 
 BQ5 es una feature para el usuario (filtro "Open • ≤15 min" de *Saved* en el front Flutter): la app manda su ubicación y
-el servidor decide qué favoritos están abiertos y a cuántos minutos caminando. **Todavía no hay autenticación**: el
-`userId` de la ruta es el identificador que manda el cliente (en Flutter, `--dart-define=DEV_USER_ID=<id>`).
+el servidor decide qué favoritos están abiertos y a cuántos minutos caminando. El `userId` de la ruta es el de la
+sesión (ver [Autenticación](#autenticación)); sin sesión se acepta un id de desarrollo (`--dart-define=DEV_USER_ID=<id>`).
 
 BQ7 acepta `months` (meses calendario hacia atrás incluido el actual, por defecto 12, máx. 36), `tzOffsetMinutes` y
-`platform`. Igual que BQ5, depende del `userId` que mande el cliente: los números solo son reales cuando haya autenticación.
+`platform`. Cuenta el `userId` de cada evento: el del token si la petición está autenticada; los ids de desarrollo
+(sin token) también cuentan, así que para la medición real hay que usar la app con sesión iniciada.
 
 ## Correr
 
@@ -40,6 +41,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - Tests: `pytest -q`
 - Datos sintéticos para la demo: `python scripts/simulate_telemetry.py --n 300` (quedan con `platform=simulator`, se pueden excluir filtrando `?platform=android-kotlin`). Mezcla vistas y búsquedas repartidas por hora (café en la mañana, hamburguesas al mediodía, street food de noche) para que el ranking de BQ3 cambie según la hora.
 - Requiere **Python 3.10+** (usa `X | None` en los tipos).
+- Autenticación: en producción definir `JWT_SECRET` (32+ bytes aleatorios). Si no está, el backend genera uno al crear
+  la base y lo guarda en ella (tabla `app_meta`), así los tokens sobreviven reinicios. `JWT_EXPIRE_MINUTES` (por
+  defecto 10080 = 7 días) controla la vigencia.
 - Modo caos (para demostrar BQ1/BQ2 con cargas reales lentas o fallidas):
   `CHAOS_MAX_DELAY_MS=5000 CHAOS_FAILURE_RATE=0.2 uvicorn app.main:app --host 0.0.0.0 --port 8000`
 
@@ -50,6 +54,9 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 
 | Método | Ruta | Uso |
 |---|---|---|
+| POST | `/api/v1/auth/signup` | Crear cuenta (`201`); devuelve el token |
+| POST | `/api/v1/auth/login` | Iniciar sesión; devuelve el token |
+| GET | `/api/v1/auth/me` | Usuario del token (para validar la sesión guardada al abrir la app) |
 | GET | `/api/v1/spots` | Lista resumida de restaurantes (sin menú ni reseñas) |
 | GET | `/api/v1/spots/{id}` | Información completa del restaurante: **esta es la "restaurant page load"** que se mide |
 | POST | `/api/v1/telemetry/page-loads` | Lote de eventos (1–500), idempotente por `eventId`. `screen` = `restaurant_detail` (vista de página), `search` (elegido desde el buscador) o `favorite_added` (guardó el restaurante; exige `userId` y `spotId`) |
@@ -62,6 +69,31 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | DELETE | `/api/v1/users/{userId}/favorites/{spotId}` | Quitar de guardados (idempotente, `204`) |
 | GET | `/api/v1/users/{userId}/favorites/nearby` | BQ5 (favoritos abiertos ahora y a ≤ `maxWalkMinutes` caminando) |
 | GET | `/health` | Health check |
+
+### Autenticación
+
+Email + contraseña → JWT (HS256) de **7 días**, sin refresh token: al vencer, cualquier endpoint responde `401` y el
+cliente vuelve a `/auth/login`. Las contraseñas se guardan con **bcrypt**.
+
+```
+POST /api/v1/auth/signup   {"email": "ana@uniandes.edu.co", "password": "segura123"}   → 201
+POST /api/v1/auth/login    {"email": "ana@uniandes.edu.co", "password": "segura123"}   → 200
+{ "userId": "3ddd5f3c-…", "email": "ana@uniandes.edu.co", "accessToken": "eyJhbGciOi…", "tokenType": "bearer",
+  "expiresIn": 604800, "expiresAt": "2026-10-09T18:30:00.123456Z" }
+
+GET /api/v1/auth/me        Authorization: Bearer <accessToken>                          → 200 {"userId", "email"}
+```
+
+- `email` se normaliza (sin espacios, minúsculas). `password` en el registro: 8–72 bytes (límite de bcrypt).
+- Errores: `409` email ya registrado · `401` email o contraseña incorrectos (mismo mensaje en ambos casos) ·
+  `422` datos inválidos. Todo `401` trae `WWW-Authenticate: Bearer`.
+- En las demás peticiones: header `Authorization: Bearer <accessToken>`. El `userId` de la respuesta es el que va en
+  `/users/{userId}/...`; con otro `userId` en la ruta → `403`. En la telemetría `userId` puede omitirse (se toma del
+  token); si viene distinto → `403`.
+- Token vencido, mal firmado, mal formado o de una cuenta borrada → `401`. **Si el header viene, se valida siempre**.
+- **Override de desarrollo**: una petición **sin** header `Authorization` puede usar cualquier `userId` (ruta o evento),
+  como el `DEV_USER_ID` del front, **excepto** el de una cuenta registrada (`401`): sin token no se puede actuar a nombre
+  de otro usuario real.
 
 Contrato del evento de telemetría (cualquier front debe enviarlo igual):
 
@@ -155,13 +187,14 @@ Arquitectura **cliente-servidor por capas**:
 └───────────────┬─────────────────────────────────────┘
                 │ HTTP/REST + JSON (camelCase, /api/v1)
 ┌───────────────▼──────────── Backend (FastAPI) ──────┐
-│ Routers      spots · telemetry · analytics · users  │  ← capa de presentación (API)
+│ Routers      auth · spots · telemetry · analytics   │  ← capa de presentación (API)
+│              · users                                │
 │ Services     AnalyticsService (BQ1, BQ2, BQ3)       │  ← lógica de negocio / motor de analítica
-│              FavoritesService (BQ5)                 │
+│              FavoritesService (BQ5) · AuthService   │
 │ Repositories SpotsRepository · TelemetryRepository  │  ← acceso a datos
-│              FavoritesRepository                    │
+│              FavoritesRepository · UsersRepository  │
 │ SQLite       spots, menu_items, reviews,            │  ← persistencia centralizada
-│              spot_opening_hours, favorites,         │
+│              spot_opening_hours, favorites, users,  │
 │              page_load_events                       │
 └─────────────────────────────────────────────────────┘
 ```
@@ -213,4 +246,5 @@ Ejemplo, BQ3:
 | Táctica **monitoring – eventos de búsqueda** | El buscador reporta qué restaurante eligió el usuario (`screen=search`) con el mismo contrato y cola que las cargas | `TelemetriaCargas.registrarBusqueda()` |
 | Táctica **fault injection** (testability) | Modo caos para provocar lentitud/fallas | `CHAOS_*` en `app/routers/spots.py` |
 | Táctica **security** | Validación de entrada (Pydantic), SQL parametrizado, HTTP plano solo en debug | `schemas.py`, repositorios, `build.gradle.kts` |
+| Táctica **security – autenticación** | Email + contraseña (bcrypt) → JWT Bearer de 7 días; el `userId` sale del token y no se puede actuar a nombre de una cuenta registrada sin su token | `auth_service.py`, `security.py` (`optional_user_id`, `resolve_acting_user`) |
 | Táctica **interoperability** | Contrato JSON versionado (`/api/v1`), camelCase, CORS abierto para el otro front | `schemas.py`, `main.py` |

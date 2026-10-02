@@ -1,6 +1,10 @@
 """Identidad de quien llama: dependencias de FastAPI que comparten los routers.
 
 Contrato: `Authorization: Bearer <accessToken>` (JWT HS256, vigencia JWT_EXPIRE_MINUTES, 7 dias por defecto).
+
+Override de desarrollo: una peticion SIN header Authorization puede seguir diciendo un userId explicito
+(ruta /users/{userId}/... o `userId` en la telemetria), como el DEV_USER_ID del front, siempre que ese id
+no sea de una cuenta registrada. Si el header viene, tiene que ser valido: nunca se cae al override.
 """
 import sqlite3
 
@@ -49,3 +53,18 @@ def require_user_id(user_id: str | None = Depends(optional_user_id)) -> str:
     if user_id is None:
         raise unauthorized("Not authenticated")
     return user_id
+
+
+def resolve_acting_user(claimed: str | None, token_user_id: str | None, users: UsersRepository) -> str | None:
+    """Quien actua en la peticion, a partir del userId que dice el cliente y del token (si vino).
+
+    Con token: el del token; si el cliente dice otro -> 403.
+    Sin token (override de desarrollo): el que dice el cliente, salvo que sea una cuenta registrada -> 401.
+    """
+    if token_user_id is not None:
+        if claimed not in (None, token_user_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="userId does not match the token")
+        return token_user_id
+    if claimed is not None and users.exists(claimed):
+        raise unauthorized(f"User '{claimed}' is a registered account: send its token")
+    return claimed

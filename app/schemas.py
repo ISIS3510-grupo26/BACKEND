@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -128,13 +128,6 @@ class PageLoadEventIn(ApiModel):
     session_id: str | None = Field(default=None, max_length=64)
     user_id: str | None = Field(default=None, max_length=128)
     occurred_at: datetime
-
-    @model_validator(mode="after")
-    def favorite_needs_user_and_spot(self):
-        # BQ7 cuenta usuarios distintos: un favorite_added sin usuario o sin restaurante no sirve.
-        if self.screen == "favorite_added" and not (self.user_id and self.spot_id):
-            raise ValueError("screen=favorite_added requires userId and spotId")
-        return self
 
 
 class PageLoadBatchIn(ApiModel):
