@@ -1,11 +1,13 @@
 """Servicio de analitica: convierte los agregados SQL en respuestas a las business questions."""
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import FailedRequestsReport, FailureGroup, SlowLoadGroup, SlowLoadsReport
+from app.schemas import (FailedRequestsReport, FailureGroup, HourlyRanking, SlowLoadGroup, SlowLoadsReport,
+                         SpotHourlyActivity, SpotViewsByHourReport)
 
 Q_SLOW = "What is the percentage of restaurant page loads that take more than {s:g} seconds? By device and OS"
 Q_FAILED = "What is the percentage of failed requests when loading the restaurant's information?"
+Q_VIEWS_BY_HOUR = "Which restaurants receive the highest number of page views and searches during each hour?"
 
 
 def _pct(part: int, total: int) -> float:
@@ -65,3 +67,34 @@ class AnalyticsService:
             by_os=to_groups(self.repo.failures("os", **filters)),
             by_platform=to_groups(self.repo.failures("platform", **filters)),
         )
+
+    def spot_views_by_hour(self, days: int, hour: int | None, tz_offset_minutes: int, limit: int,
+                           now: datetime | None = None, platform: str | None = None) -> SpotViewsByHourReport:
+        """BQ3 (tipo 4): por cada hora del dia, que restaurantes reciben mas vistas de pagina y busquedas.
+
+        Sin `hour` devuelve las 24 horas con actividad (la respuesta analitica completa);
+        con `hour` devuelve solo esa hora (lo que la app muestra como "Popular right now").
+        """
+        now = now or datetime.now(timezone.utc)
+        rows = self.repo.spot_activity_by_hour(hour, tz_offset_minutes,
+                                               since=now - timedelta(days=days), until=None, platform=platform)
+        by_hour: dict[int, list] = {}
+        for r in rows:
+            by_hour.setdefault(r["hour"], []).append(r)
+        hours = []
+        for h in sorted(by_hour):
+            group = by_hour[h]
+            hours.append(HourlyRanking(
+                hour=h,
+                total_page_views=sum(r["page_views"] for r in group),
+                total_searches=sum(r["searches"] for r in group),
+                spots=[
+                    SpotHourlyActivity(rank=i + 1, spot_id=r["spot_id"], name=r["name"] or r["spot_id"],
+                                       emoji=r["emoji"] or "🍽️", page_views=r["page_views"], searches=r["searches"],
+                                       total=r["page_views"] + r["searches"])
+                    for i, r in enumerate(group[:limit])
+                ],
+            ))
+        if hour is not None and not hours:
+            hours.append(HourlyRanking(hour=hour, total_page_views=0, total_searches=0, spots=[]))
+        return SpotViewsByHourReport(question=Q_VIEWS_BY_HOUR, days=days, tz_offset_minutes=tz_offset_minutes, hours=hours)

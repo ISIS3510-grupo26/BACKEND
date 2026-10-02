@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from app.schemas import PageLoadEventIn
 
 RESTAURANT_SCREEN = "restaurant_detail"
+SEARCH_SCREEN = "search"  # el usuario eligio un restaurante desde el buscador
 
 # Columnas por las que se permite agrupar (lista blanca: nunca se interpola input del usuario).
 GROUP_EXPRESSIONS = {
@@ -46,17 +47,17 @@ class TelemetryRepository:
 
     def _where(self, only_success: bool, since: datetime | None, until: datetime | None,
                platform: str | None) -> tuple[str, list]:
-        clauses, params = ["screen = ?"], [RESTAURANT_SCREEN]
+        clauses, params = ["e.screen = ?"], [RESTAURANT_SCREEN]
         if only_success:
-            clauses.append("success = 1")
+            clauses.append("e.success = 1")
         if since:
-            clauses.append("occurred_at >= ?")
+            clauses.append("e.occurred_at >= ?")
             params.append(_iso(since))
         if until:
-            clauses.append("occurred_at < ?")
+            clauses.append("e.occurred_at < ?")
             params.append(_iso(until))
         if platform:
-            clauses.append("platform = ?")
+            clauses.append("e.platform = ?")
             params.append(platform)
         return " AND ".join(clauses), params
 
@@ -67,7 +68,7 @@ class TelemetryRepository:
         return self.conn.execute(
             f"SELECT {key} AS key, COUNT(*) AS total, "
             f"SUM(CASE WHEN duration_ms > ? THEN 1 ELSE 0 END) AS hits "
-            f"FROM page_load_events WHERE {where} GROUP BY key ORDER BY hits * 1.0 / COUNT(*) DESC, total DESC",
+            f"FROM page_load_events e WHERE {where} GROUP BY key ORDER BY hits * 1.0 / COUNT(*) DESC, total DESC",
             [threshold_ms, *params],
         ).fetchall()
 
@@ -78,16 +79,42 @@ class TelemetryRepository:
         return self.conn.execute(
             f"SELECT {key} AS key, COUNT(*) AS total, "
             f"SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) AS hits "
-            f"FROM page_load_events WHERE {where} GROUP BY key ORDER BY hits DESC, total DESC",
+            f"FROM page_load_events e WHERE {where} GROUP BY key ORDER BY hits DESC, total DESC",
+            params,
+        ).fetchall()
+
+    def spot_activity_by_hour(self, hour: int | None, tz_offset_minutes: int, **filters) -> list[sqlite3.Row]:
+        """BQ3: vistas de pagina y busquedas de cada restaurante agrupadas por hora local.
+
+        Una vista = un evento `restaurant_detail` (exitoso o no: cuenta la intencion del estudiante).
+        Una busqueda = un evento `search` (el restaurante fue elegido desde el buscador).
+        `occurred_at` esta en UTC, asi que la hora se calcula desplazandola a la zona del campus.
+        """
+        where, params = self._where(only_success=False, **filters)
+        where = where.replace("e.screen = ?", "e.screen IN (?, ?)", 1)
+        params = [RESTAURANT_SCREEN, SEARCH_SCREEN, *params[1:]]
+        local_hour = "CAST(strftime('%H', e.occurred_at, ? || ' minutes') AS INTEGER)"
+        params.insert(0, str(tz_offset_minutes))
+        clauses = [where, "e.spot_id IS NOT NULL"]
+        if hour is not None:
+            clauses.append(f"{local_hour} = ?")
+            params.extend([str(tz_offset_minutes), hour])
+        return self.conn.execute(
+            f"SELECT {local_hour} AS hour, e.spot_id AS spot_id, s.name AS name, s.emoji AS emoji, "
+            "SUM(CASE WHEN e.screen = 'restaurant_detail' THEN 1 ELSE 0 END) AS page_views, "
+            "SUM(CASE WHEN e.screen = 'search' THEN 1 ELSE 0 END) AS searches "
+            "FROM page_load_events e LEFT JOIN spots s ON s.id = e.spot_id "
+            f"WHERE {' AND '.join(clauses)} "
+            "GROUP BY hour, e.spot_id ORDER BY hour, (page_views + searches) DESC, page_views DESC, e.spot_id",
             params,
         ).fetchall()
 
     def failures_by_error_type(self, **filters) -> list[sqlite3.Row]:
         """Reparte las fallas por tipo de error; el porcentaje es sobre el total de intentos."""
         where, params = self._where(only_success=False, **filters)
-        total = self.conn.execute(f"SELECT COUNT(*) FROM page_load_events WHERE {where}", params).fetchone()[0]
+        total = self.conn.execute(f"SELECT COUNT(*) FROM page_load_events e WHERE {where}", params).fetchone()[0]
         return self.conn.execute(
             f"SELECT {GROUP_EXPRESSIONS['error_type']} AS key, ? AS total, COUNT(*) AS hits "
-            f"FROM page_load_events WHERE {where} AND success = 0 GROUP BY key ORDER BY hits DESC",
+            f"FROM page_load_events e WHERE {where} AND e.success = 0 GROUP BY key ORDER BY hits DESC",
             [total, *params],
         ).fetchall()
