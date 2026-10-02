@@ -247,3 +247,89 @@ def test_haversine_and_walking_speed():
     from app.services.favorites_service import WALKING_SPEED_M_PER_MIN, haversine_m
     assert haversine_m(0, 0, 1, 0) == pytest.approx(111_195, rel=1e-3)  # 1 grado de latitud
     assert WALKING_SPEED_M_PER_MIN * 15 == 1200                          # 15 min ~ 1,2 km
+
+
+# ---------- BQ7: usuarios que agregan favoritos cada mes ----------
+
+def favorite_event(user, spot, occurred_at):
+    e = event(0, spot=spot)
+    e.update(screen="favorite_added", userId=user, occurredAt=occurred_at)
+    return e
+
+
+def test_favorite_added_requires_user_and_spot(client):
+    e = favorite_event("ana", "nitro-coffee", "2026-10-01T12:00:00Z")
+    del e["userId"]
+    assert client.post("/api/v1/telemetry/page-loads", json={"events": [e]}).status_code == 422
+    e = favorite_event("ana", None, "2026-10-01T12:00:00Z")
+    assert client.post("/api/v1/telemetry/page-loads", json={"events": [e]}).status_code == 422
+    ok = favorite_event("ana", "nitro-coffee", "2026-10-01T12:00:00Z")
+    assert client.post("/api/v1/telemetry/page-loads", json={"events": [ok]}).json() == {"accepted": 1, "duplicates": 0}
+
+
+def test_monthly_active_favoriters(client):
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    iso = lambda dt: dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    month = lambda dt: (dt + timedelta(minutes=-300)).strftime("%Y-%m")  # mes local en Bogota
+    last_month, old = now - timedelta(days=35), now - timedelta(days=120)
+
+    client.post("/api/v1/telemetry/page-loads", json={"events": [
+        favorite_event("ana", "nitro-coffee", iso(now)),
+        favorite_event("ana", "green-bowl-co", iso(now)),     # mismo usuario, mismo mes: cuenta una vez
+        favorite_event("beto", "nitro-coffee", iso(now)),
+        favorite_event("ana", "conda-de-bons", iso(last_month)),
+        favorite_event("caro", "conda-de-bons", iso(old)),    # fuera de la ventana de 3 meses
+        event(500, spot="nitro-coffee"),                      # otras pantallas no cuentan
+    ]})
+
+    r = client.get("/api/v1/analytics/monthly-active-favoriters", params={"months": 3}).json()
+    assert r["question"] == "How many active users add one or more restaurants to their favorites each month?"
+    assert (r["months"], r["tzOffsetMinutes"]) == (3, -300)
+    assert len(r["byMonth"]) == 3 and r["byMonth"][-1]["month"] == month(now)
+    by_month = {m["month"]: (m["activeFavoriters"], m["favoriteEvents"]) for m in r["byMonth"]}
+    assert by_month[month(now)] == (2, 3)
+    assert by_month[month(last_month)] == (1, 1)
+    assert month(old) not in by_month
+
+    r = client.get("/api/v1/analytics/monthly-active-favoriters", params={"months": 1, "platform": "flutter"}).json()
+    assert r["byMonth"] == [{"month": month(now), "activeFavoriters": 0, "favoriteEvents": 0}]
+
+
+def test_monthly_active_favoriters_uses_local_calendar_month(client):
+    from datetime import datetime, timezone
+    from app.db import connect
+    from app.repositories.telemetry_repository import TelemetryRepository
+    from app.services.analytics_service import AnalyticsService
+
+    # 1 oct 03:00 UTC = 30 sep 22:00 en Bogota: es un favorito de septiembre.
+    client.post("/api/v1/telemetry/page-loads", json={"events": [
+        favorite_event("ana", "nitro-coffee", "2026-10-01T03:00:00Z"),
+        favorite_event("beto", "nitro-coffee", "2026-10-01T06:00:00Z"),
+    ]})
+    conn = connect()
+    try:
+        service = AnalyticsService(TelemetryRepository(conn))
+        now = datetime(2026, 10, 15, tzinfo=timezone.utc)
+        bogota = service.monthly_active_favoriters(months=2, tz_offset_minutes=-300, now=now)
+        assert [(m.month, m.active_favoriters) for m in bogota.by_month] == [("2026-09", 1), ("2026-10", 1)]
+        utc = service.monthly_active_favoriters(months=2, tz_offset_minutes=0, now=now)
+        assert [(m.month, m.active_favoriters) for m in utc.by_month] == [("2026-09", 0), ("2026-10", 2)]
+        # La ventana cruza el cambio de anio.
+        jan = service.monthly_active_favoriters(months=3, tz_offset_minutes=-300, now=datetime(2027, 1, 5, tzinfo=timezone.utc))
+        assert [m.month for m in jan.by_month] == ["2026-11", "2026-12", "2027-01"]
+    finally:
+        conn.close()
+
+
+def test_favorite_events_do_not_affect_other_bqs(client):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    view = event(4000); view["occurredAt"] = now
+    client.post("/api/v1/telemetry/page-loads", json={"events": [favorite_event("ana", "nitro-coffee", now), view]})
+    assert client.get("/api/v1/analytics/slow-page-loads").json()["totalLoads"] == 1
+    assert client.get("/api/v1/analytics/failed-requests").json()["totalRequests"] == 1
+    r = client.get("/api/v1/analytics/spot-views-by-hour").json()
+    totals = (sum(h["totalPageViews"] for h in r["hours"]), sum(h["totalSearches"] for h in r["hours"]))
+    assert totals == (1, 0)  # solo la carga del restaurante; el favorito no es vista ni busqueda
+

@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS page_load_events (
     platform     TEXT NOT NULL,             -- p. ej. android-kotlin, flutter, ios
     app_version  TEXT,
     session_id   TEXT,
+    user_id      TEXT,                      -- obligatorio en screen = favorite_added (BQ7)
     occurred_at  TEXT NOT NULL,
     received_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -104,6 +105,7 @@ CREATE INDEX IF NOT EXISTS idx_ple_screen_time ON page_load_events(screen, occur
 # tablas que ya existen, asi que las bases creadas antes se actualizan aqui (idempotente).
 ADDED_COLUMNS = {
     "spots": [("latitude", "REAL"), ("longitude", "REAL")],
+    "page_load_events": [("user_id", "TEXT")],
 }
 
 

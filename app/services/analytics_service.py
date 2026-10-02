@@ -2,12 +2,13 @@
 from datetime import datetime, timedelta, timezone
 
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import (FailedRequestsReport, FailureGroup, HourlyRanking, SlowLoadGroup, SlowLoadsReport,
-                         SpotHourlyActivity, SpotViewsByHourReport)
+from app.schemas import (FailedRequestsReport, FailureGroup, HourlyRanking, MonthlyActiveFavoritersReport,
+                         MonthlyFavoriters, SlowLoadGroup, SlowLoadsReport, SpotHourlyActivity, SpotViewsByHourReport)
 
 Q_SLOW = "What is the percentage of restaurant page loads that take more than {s:g} seconds? By device and OS"
 Q_FAILED = "What is the percentage of failed requests when loading the restaurant's information?"
 Q_VIEWS_BY_HOUR = "Which restaurants receive the highest number of page views and searches during each hour?"
+Q_MONTHLY_FAVORITERS = "How many active users add one or more restaurants to their favorites each month?"
 
 
 def _pct(part: int, total: int) -> float:
@@ -98,3 +99,26 @@ class AnalyticsService:
         if hour is not None and not hours:
             hours.append(HourlyRanking(hour=hour, total_page_views=0, total_searches=0, spots=[]))
         return SpotViewsByHourReport(question=Q_VIEWS_BY_HOUR, days=days, tz_offset_minutes=tz_offset_minutes, hours=hours)
+
+    def monthly_active_favoriters(self, months: int, tz_offset_minutes: int, now: datetime | None = None,
+                                  platform: str | None = None) -> MonthlyActiveFavoritersReport:
+        """BQ7: por mes calendario (hora local), COUNT(DISTINCT userId) con al menos un evento favorite_added.
+
+        Devuelve los `months` meses hasta el actual, incluidos los que no tuvieron actividad (en 0).
+        """
+        now = now or datetime.now(timezone.utc)
+        local = now.astimezone(timezone.utc) + timedelta(minutes=tz_offset_minutes)
+        index = local.year * 12 + local.month - 1
+        window = [f"{i // 12:04d}-{i % 12 + 1:02d}" for i in range(index - months + 1, index + 1)]
+        rows = {r["month"]: r for r in self.repo.favoriters_by_month(tz_offset_minutes, window[0], window[-1],
+                                                                     platform=platform)}
+        return MonthlyActiveFavoritersReport(
+            question=Q_MONTHLY_FAVORITERS,
+            months=months,
+            tz_offset_minutes=tz_offset_minutes,
+            by_month=[
+                MonthlyFavoriters(month=m, active_favoriters=rows[m]["users"] if m in rows else 0,
+                                  favorite_events=rows[m]["events"] if m in rows else 0)
+                for m in window
+            ],
+        )

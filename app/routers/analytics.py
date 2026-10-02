@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from app.config import settings
 from app.db import get_conn
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import FailedRequestsReport, SlowLoadsReport, SpotViewsByHourReport
+from app.schemas import FailedRequestsReport, MonthlyActiveFavoritersReport, SlowLoadsReport, SpotViewsByHourReport
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
@@ -52,3 +52,14 @@ def spot_views_by_hour(
     """BQ3 (tipo 4): restaurantes con mas vistas de pagina y busquedas en cada hora del dia."""
     return service.spot_views_by_hour(days=days, hour=hour, tz_offset_minutes=tz_offset_minutes,
                                       limit=limit, platform=platform)
+
+
+@router.get("/monthly-active-favoriters", response_model=MonthlyActiveFavoritersReport)
+def monthly_active_favoriters(
+    months: int = Query(12, ge=1, le=36, description="Meses calendario hacia atras, incluido el actual"),
+    tz_offset_minutes: int = Query(settings.campus_tz_offset_minutes, alias="tzOffsetMinutes", ge=-840, le=840),
+    platform: str | None = Query(None),
+    service: AnalyticsService = Depends(get_service),
+):
+    """BQ7: usuarios distintos que agregan al menos un restaurante a favoritos en cada mes."""
+    return service.monthly_active_favoriters(months=months, tz_offset_minutes=tz_offset_minutes, platform=platform)

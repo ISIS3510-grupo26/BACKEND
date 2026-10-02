@@ -6,6 +6,7 @@ from app.schemas import PageLoadEventIn
 
 RESTAURANT_SCREEN = "restaurant_detail"
 SEARCH_SCREEN = "search"  # el usuario eligio un restaurante desde el buscador
+FAVORITE_SCREEN = "favorite_added"  # el usuario guardo un restaurante (BQ7)
 
 # Columnas por las que se permite agrupar (lista blanca: nunca se interpola input del usuario).
 GROUP_EXPRESSIONS = {
@@ -35,11 +36,11 @@ class TelemetryRepository:
             self.conn.executemany(
                 "INSERT OR IGNORE INTO page_load_events (event_id, screen, spot_id, duration_ms, success, "
                 "http_status, error_type, device_model, os_name, os_version, platform, app_version, "
-                "session_id, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "session_id, user_id, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (e.event_id, e.screen, e.spot_id, e.duration_ms, int(e.success), e.http_status,
                      e.error_type, e.device_model, e.os_name, e.os_version, e.platform, e.app_version,
-                     e.session_id, _iso(e.occurred_at))
+                     e.session_id, e.user_id, _iso(e.occurred_at))
                     for e in events
                 ],
             )
@@ -106,6 +107,21 @@ class TelemetryRepository:
             "FROM page_load_events e LEFT JOIN spots s ON s.id = e.spot_id "
             f"WHERE {' AND '.join(clauses)} "
             "GROUP BY hour, e.spot_id ORDER BY hour, (page_views + searches) DESC, page_views DESC, e.spot_id",
+            params,
+        ).fetchall()
+
+    def favoriters_by_month(self, tz_offset_minutes: int, first_month: str, last_month: str,
+                            platform: str | None = None) -> list[sqlite3.Row]:
+        """BQ7: por mes local ('YYYY-MM'), usuarios distintos con eventos favorite_added y total de eventos."""
+        local_month = "strftime('%Y-%m', occurred_at, ? || ' minutes')"
+        clauses = ["screen = ?", "user_id IS NOT NULL", f"{local_month} BETWEEN ? AND ?"]
+        params: list = [str(tz_offset_minutes), FAVORITE_SCREEN, str(tz_offset_minutes), first_month, last_month]
+        if platform:
+            clauses.append("platform = ?")
+            params.append(platform)
+        return self.conn.execute(
+            f"SELECT {local_month} AS month, COUNT(DISTINCT user_id) AS users, COUNT(*) AS events "
+            f"FROM page_load_events WHERE {' AND '.join(clauses)} GROUP BY month ORDER BY month",
             params,
         ).fetchall()
 

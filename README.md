@@ -9,6 +9,7 @@ Sirve el catálogo de restaurantes y recibe la telemetría con la que se respond
 | BQ2 | What is the percentage of failed requests when loading the restaurant's information? | `GET /api/v1/analytics/failed-requests` |
 | BQ3 | Which restaurants receive the highest number of page views and searches during each hour? | `GET /api/v1/analytics/spot-views-by-hour` |
 | BQ5 | Which restaurants in the user's favorites are open now and within a 15-minute walk? | `GET /api/v1/users/{userId}/favorites/nearby?lat=&lng=&maxWalkMinutes=15` |
+| BQ7 | How many active users add one or more restaurants to their favorites each month? | `GET /api/v1/analytics/monthly-active-favoriters` |
 
 BQ1 y BQ2 son de **tipo 1** (rendimiento técnico de la app). BQ3 es de **tipo 4** (comportamiento de uso por hora);
 además de responderse en el endpoint, su resultado se muestra al usuario como la sección **"Popular right now"** del feed
@@ -22,6 +23,9 @@ BQ3 acepta `platform`, `days` (ventana hacia atrás, por defecto 7), `limit` (re
 BQ5 es una feature para el usuario (filtro "Open • ≤15 min" de *Saved* en el front Flutter): la app manda su ubicación y
 el servidor decide qué favoritos están abiertos y a cuántos minutos caminando. **Todavía no hay autenticación**: el
 `userId` de la ruta es el identificador que manda el cliente (en Flutter, `--dart-define=DEV_USER_ID=<id>`).
+
+BQ7 acepta `months` (meses calendario hacia atrás incluido el actual, por defecto 12, máx. 36), `tzOffsetMinutes` y
+`platform`. Igual que BQ5, depende del `userId` que mande el cliente: los números solo son reales cuando haya autenticación.
 
 ## Correr
 
@@ -48,10 +52,11 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 |---|---|---|
 | GET | `/api/v1/spots` | Lista resumida de restaurantes (sin menú ni reseñas) |
 | GET | `/api/v1/spots/{id}` | Información completa del restaurante: **esta es la "restaurant page load"** que se mide |
-| POST | `/api/v1/telemetry/page-loads` | Lote de eventos (1–500), idempotente por `eventId`. `screen` = `restaurant_detail` (vista de página) o `search` (elegido desde el buscador) |
+| POST | `/api/v1/telemetry/page-loads` | Lote de eventos (1–500), idempotente por `eventId`. `screen` = `restaurant_detail` (vista de página), `search` (elegido desde el buscador) o `favorite_added` (guardó el restaurante; exige `userId` y `spotId`) |
 | GET | `/api/v1/analytics/slow-page-loads` | BQ1 |
 | GET | `/api/v1/analytics/failed-requests` | BQ2 |
 | GET | `/api/v1/analytics/spot-views-by-hour` | BQ3 (vistas + búsquedas por restaurante en cada hora) |
+| GET | `/api/v1/analytics/monthly-active-favoriters` | BQ7 (usuarios distintos que agregan favoritos, por mes) |
 | GET | `/api/v1/users/{userId}/favorites` | Restaurantes guardados por el usuario (mismo formato que `/spots`) |
 | PUT | `/api/v1/users/{userId}/favorites/{spotId}` | Guardar restaurante (idempotente, `204`; `404` si el restaurante no existe) |
 | DELETE | `/api/v1/users/{userId}/favorites/{spotId}` | Quitar de guardados (idempotente, `204`) |
@@ -87,6 +92,9 @@ Contrato del evento de telemetría (cualquier front debe enviarlo igual):
   desde `lat`/`lng`. *Minutos caminando* = metros / **80 m/min** (4,8 km/h, `WALKING_SPEED_M_PER_MIN`); como es línea
   recta, la caminata real puede ser algo mayor. Se descartan los que superan `maxWalkMinutes` (por defecto 15, máx. 120)
   y se ordena del más cercano al más lejano. Coordenadas y horarios del seed son **datos de ejemplo** alrededor de Uniandes.
+- BQ7: *usuario activo que agrega favoritos* = `userId` distinto con al menos un evento `screen=favorite_added` en el
+  mes calendario local (`occurredAt` desplazado con `tzOffsetMinutes`): `COUNT(DISTINCT userId)` por mes. Se reporta
+  también el total de eventos del mes. Los meses sin actividad salen en `0`. BQ1/BQ2/BQ3 ignoran estos eventos.
 
 Evento de búsqueda (mismo endpoint y contrato):
 
@@ -94,6 +102,23 @@ Evento de búsqueda (mismo endpoint y contrato):
 { "eventId": "uuid", "screen": "search", "spotId": "nitro-coffee", "durationMs": 0, "success": true,
   "httpStatus": null, "errorType": null, "deviceModel": "...", "osName": "Android", "osVersion": "14",
   "platform": "android-kotlin", "appVersion": "1.0", "sessionId": "uuid", "occurredAt": "2026-10-01T17:04:05.123Z" }
+```
+
+Evento de favorito (BQ7; mismo endpoint y contrato, más `userId`). La app lo manda al tocar el corazón para guardar:
+
+```json
+{ "eventId": "uuid", "screen": "favorite_added", "spotId": "nitro-coffee", "userId": "<id del usuario>",
+  "durationMs": 0, "success": true, "httpStatus": null, "errorType": null, "deviceModel": "...", "osName": "Android",
+  "osVersion": "14", "platform": "flutter", "appVersion": "1.0", "sessionId": "uuid", "occurredAt": "2026-10-01T17:04:05.123Z" }
+```
+
+Ejemplo de respuesta de BQ7 (`?months=2`):
+
+```json
+{ "question": "How many active users add one or more restaurants to their favorites each month?",
+  "months": 2, "tzOffsetMinutes": -300,
+  "byMonth": [ { "month": "2026-09", "activeFavoriters": 14, "favoriteEvents": 31 },
+               { "month": "2026-10", "activeFavoriters": 3, "favoriteEvents": 5 } ] }
 ```
 
 Ejemplo de respuesta de BQ5 (`GET /api/v1/users/ana/favorites/nearby?lat=4.6019&lng=-74.0658&maxWalkMinutes=15`;

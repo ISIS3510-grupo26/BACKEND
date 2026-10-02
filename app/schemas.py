@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -85,7 +85,15 @@ class PageLoadEventIn(ApiModel):
     platform: str = Field(min_length=1, max_length=32)
     app_version: str | None = Field(default=None, max_length=32)
     session_id: str | None = Field(default=None, max_length=64)
+    user_id: str | None = Field(default=None, max_length=128)
     occurred_at: datetime
+
+    @model_validator(mode="after")
+    def favorite_needs_user_and_spot(self):
+        # BQ7 cuenta usuarios distintos: un favorite_added sin usuario o sin restaurante no sirve.
+        if self.screen == "favorite_added" and not (self.user_id and self.spot_id):
+            raise ValueError("screen=favorite_added requires userId and spotId")
+        return self
 
 
 class PageLoadBatchIn(ApiModel):
@@ -159,3 +167,18 @@ class SpotViewsByHourReport(ApiModel):
     days: int
     tz_offset_minutes: int
     hours: list[HourlyRanking]  # una entrada por hora con actividad (o solo la hora pedida)
+
+
+# ---------- BQ7: usuarios activos que agregan favoritos cada mes ----------
+
+class MonthlyFavoriters(ApiModel):
+    month: str                 # 'YYYY-MM' en hora local del campus
+    active_favoriters: int     # usuarios distintos con >= 1 evento favorite_added en el mes
+    favorite_events: int       # total de eventos favorite_added del mes
+
+
+class MonthlyActiveFavoritersReport(ApiModel):
+    question: str
+    months: int
+    tz_offset_minutes: int
+    by_month: list[MonthlyFavoriters]  # un elemento por mes de la ventana, del mas antiguo al actual (0 si no hubo)
