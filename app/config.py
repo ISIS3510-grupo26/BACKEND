@@ -11,6 +11,8 @@ class Settings:
     # Inyeccion de fallas para demos: permite generar cargas lentas / fallidas reales.
     chaos_failure_rate: float = float(os.getenv("CHAOS_FAILURE_RATE", "0"))
     chaos_max_delay_ms: int = int(os.getenv("CHAOS_MAX_DELAY_MS", "0"))
+    # Zona horaria del campus (Bogota = UTC-5) para calcular la franja horaria de la BQ3.
+    campus_tz_offset_minutes: int = int(os.getenv("CAMPUS_TZ_OFFSET_MINUTES", "-300"))
 
 
 settings = Settings()

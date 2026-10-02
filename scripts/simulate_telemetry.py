@@ -2,6 +2,7 @@
 
 Uso:  python scripts/simulate_telemetry.py [--url http://localhost:8000] [--n 300]
 Los eventos llevan platform="simulator" para poder filtrarlos/excluirlos (?platform=...).
+Mezcla vistas de pagina y busquedas repartidas por hora para que BQ3 (vistas + busquedas por hora) tenga un ranking distinto segun la hora.
 """
 import argparse
 import json
@@ -23,18 +24,47 @@ SPOTS = ["conda-de-bons", "green-bowl-co", "nitro-coffee", "taqueria-la-esquina"
 ERRORS = [("TIMEOUT", None), ("NO_CONNECTION", None), ("HTTP_503", 503), ("HTTP_500", 500)]
 
 
+BOGOTA = timezone(timedelta(hours=-5))
+
+# Pesos de interes por hora local (BQ3): cafe por la manana, almuerzo al mediodia, street food de noche.
+# Hace que el ranking "vistas + busquedas por hora" cambie a lo largo del dia, como con estudiantes reales.
+POPULARITY_BY_SLOT = {
+    "morning": {"nitro-coffee": 6, "green-bowl-co": 2, "conda-de-bons": 1, "la-esquina-burger-lab": 1,
+                "taqueria-la-esquina": 1, "poodle-pizza-slices": 1, "el-vagon-street-food": 1},
+    "lunch": {"conda-de-bons": 5, "la-esquina-burger-lab": 5, "green-bowl-co": 4, "taqueria-la-esquina": 3,
+              "poodle-pizza-slices": 2, "el-vagon-street-food": 2, "nitro-coffee": 1},
+    "afternoon": {"nitro-coffee": 4, "poodle-pizza-slices": 3, "green-bowl-co": 2, "conda-de-bons": 2,
+                  "la-esquina-burger-lab": 2, "taqueria-la-esquina": 1, "el-vagon-street-food": 1},
+    "night": {"el-vagon-street-food": 5, "taqueria-la-esquina": 4, "poodle-pizza-slices": 4, "conda-de-bons": 2,
+              "la-esquina-burger-lab": 2, "green-bowl-co": 1, "nitro-coffee": 1},
+}
+SEARCH_RATE = 0.3  # 3 de cada 10 eventos son busquedas (el usuario eligio el restaurante desde el buscador)
+
+
+def pick_spot(local_hour: int) -> str:
+    slot = "morning" if local_hour < 11 else "lunch" if local_hour < 15 else "afternoon" if local_hour < 18 else "night"
+    weights = POPULARITY_BY_SLOT[slot]
+    return random.choices(list(weights), weights=list(weights.values()))[0]
+
+
 def make_event(now: datetime) -> dict:
     model, os_name, os_version, mean, fail_rate = random.choice(DEVICES)
+    # Los estudiantes usan la app sobre todo entre 7:00 y 23:00 hora de Bogota.
+    occurred = now - timedelta(days=random.randint(0, 6))
+    occurred = occurred.astimezone(BOGOTA).replace(hour=random.choice(range(7, 23)), minute=random.randint(0, 59))
+    base = {
+        "eventId": str(uuid.uuid4()), "spotId": pick_spot(occurred.hour),
+        "deviceModel": model, "osName": os_name, "osVersion": os_version, "platform": "simulator",
+        "appVersion": "1.0", "sessionId": str(uuid.uuid4())[:8],
+        "occurredAt": occurred.astimezone(timezone.utc).isoformat(),
+    }
+    if random.random() < SEARCH_RATE:
+        return {**base, "screen": "search", "durationMs": 0, "success": True, "httpStatus": None, "errorType": None}
     failed = random.random() < fail_rate
     error, status = random.choice(ERRORS) if failed else (None, 200)
     duration = 10_000 if error == "TIMEOUT" else max(80, int(random.lognormvariate(0, 0.45) * mean))
-    return {
-        "eventId": str(uuid.uuid4()), "screen": "restaurant_detail", "spotId": random.choice(SPOTS),
-        "durationMs": duration, "success": not failed, "httpStatus": status, "errorType": error,
-        "deviceModel": model, "osName": os_name, "osVersion": os_version, "platform": "simulator",
-        "appVersion": "1.0", "sessionId": str(uuid.uuid4())[:8],
-        "occurredAt": (now - timedelta(minutes=random.randint(0, 7 * 24 * 60))).isoformat(),
-    }
+    return {**base, "screen": "restaurant_detail", "durationMs": duration, "success": not failed,
+            "httpStatus": status, "errorType": error}
 
 
 def main():

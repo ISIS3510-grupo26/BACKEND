@@ -89,3 +89,59 @@ def test_failed_requests(client):
 def test_empty_reports(client):
     assert client.get("/api/v1/analytics/slow-page-loads").json()["slowPercentage"] == 0.0
     assert client.get("/api/v1/analytics/failed-requests").json()["failurePercentage"] == 0.0
+
+
+def test_spot_views_and_searches_by_hour(client):
+    # occurredAt es UTC; Bogota = UTC-5 -> 17:xxZ es la hora local 12, 13:xxZ es la hora local 8.
+    from datetime import datetime, timedelta, timezone
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    def ev(spot, utc_time, screen="restaurant_detail", success=True):
+        e = event(500 if screen == "restaurant_detail" else 0, success=success, spot=spot,
+                  error=None if success else "TIMEOUT")
+        e["occurredAt"], e["screen"] = f"{today}T{utc_time}Z", screen
+        return e
+
+    client.post("/api/v1/telemetry/page-loads", json={"events": [
+        ev("conda-de-bons", "17:05:00"), ev("conda-de-bons", "17:40:00"),
+        ev("conda-de-bons", "17:50:00", screen="search"),            # busqueda que termino en este restaurante
+        ev("green-bowl-co", "17:10:00", success=False),              # una vista fallida sigue siendo interes
+        ev("green-bowl-co", "17:20:00", screen="search"), ev("green-bowl-co", "17:30:00", screen="search"),
+        ev("nitro-coffee", "13:15:00"),
+    ]})
+
+    r = client.get("/api/v1/analytics/spot-views-by-hour").json()
+    assert r["question"].startswith("Which restaurants receive the highest number of page views and searches")
+    assert [h["hour"] for h in r["hours"]] == [8, 12]
+    noon = r["hours"][1]
+    assert (noon["totalPageViews"], noon["totalSearches"]) == (3, 3)
+    assert [(s["rank"], s["spotId"], s["pageViews"], s["searches"], s["total"]) for s in noon["spots"]] == [
+        (1, "conda-de-bons", 2, 1, 3), (2, "green-bowl-co", 1, 2, 3)]  # empate: gana el de mas vistas
+    assert noon["spots"][0]["name"] == "Conda de Bons"
+
+    # La app pide solo la hora actual del celular.
+    r = client.get("/api/v1/analytics/spot-views-by-hour", params={"hour": 8, "limit": 1}).json()
+    assert len(r["hours"]) == 1 and r["hours"][0]["hour"] == 8
+    assert [s["spotId"] for s in r["hours"][0]["spots"]] == ["nitro-coffee"]
+
+    # Una hora sin actividad devuelve la hora con ranking vacio (la UI no tiene que adivinar).
+    r = client.get("/api/v1/analytics/spot-views-by-hour", params={"hour": 3}).json()
+    assert r["hours"] == [{"hour": 3, "totalPageViews": 0, "totalSearches": 0, "spots": []}]
+
+    # Fuera de la ventana de dias no cuenta; dentro de una ventana mayor si.
+    old = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT17:00:00Z")
+    e = event(300, spot="poodle-pizza-slices"); e["occurredAt"] = old
+    client.post("/api/v1/telemetry/page-loads", json={"events": [e]})
+    r = client.get("/api/v1/analytics/spot-views-by-hour", params={"hour": 12}).json()
+    assert all(s["spotId"] != "poodle-pizza-slices" for s in r["hours"][0]["spots"])
+    r = client.get("/api/v1/analytics/spot-views-by-hour", params={"hour": 12, "days": 60}).json()
+    assert any(s["spotId"] == "poodle-pizza-slices" for s in r["hours"][0]["spots"])
+
+
+def test_search_events_do_not_affect_bq1_bq2(client):
+    e = event(0, spot="conda-de-bons"); e["screen"] = "search"
+    client.post("/api/v1/telemetry/page-loads", json={"events": [e, event(4000)]})
+    slow = client.get("/api/v1/analytics/slow-page-loads").json()
+    failed = client.get("/api/v1/analytics/failed-requests").json()
+    assert (slow["totalLoads"], slow["slowLoads"]) == (1, 1)
+    assert failed["totalRequests"] == 1

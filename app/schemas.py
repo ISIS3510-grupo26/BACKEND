@@ -122,3 +122,29 @@ class FailedRequestsReport(ApiModel):
     by_spot: list[FailureGroup]
     by_os: list[FailureGroup]
     by_platform: list[FailureGroup]
+
+
+# ---------- BQ3 (tipo 4): vistas de pagina y busquedas por restaurante en cada hora ----------
+
+class SpotHourlyActivity(ApiModel):
+    rank: int
+    spot_id: str
+    name: str
+    emoji: str
+    page_views: int    # aperturas de la pagina del restaurante (screen = restaurant_detail)
+    searches: int      # veces que el restaurante fue elegido desde el buscador (screen = search)
+    total: int         # page_views + searches: criterio del ranking
+
+
+class HourlyRanking(ApiModel):
+    hour: int                  # hora local del campus, 0-23
+    total_page_views: int
+    total_searches: int
+    spots: list[SpotHourlyActivity]
+
+
+class SpotViewsByHourReport(ApiModel):
+    question: str
+    days: int
+    tz_offset_minutes: int
+    hours: list[HourlyRanking]  # una entrada por hora con actividad (o solo la hora pedida)
