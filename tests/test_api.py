@@ -526,3 +526,69 @@ def test_nearby_picks_validation(client):
     assert client.get(url, params={**NITRO, "maxWalkMinutes": 0}).status_code == 422
     assert client.get(url, params={**NITRO, "limit": 0}).status_code == 422
     assert client.get(url, params={**NITRO, "limit": 21}).status_code == 422
+
+def test_searches_by_weekday_endpoint_counts_search_events_and_returns_all_days(client):
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    recent = now - timedelta(hours=3)
+    old = now - timedelta(days=29)
+
+    def ev(screen, occurred_at):
+        e = event(0 if screen == "search" else 500)
+        e["screen"] = screen
+        e["occurredAt"] = occurred_at.isoformat().replace("+00:00", "Z")
+        return e
+
+    client.post("/api/v1/telemetry/page-loads", json={"events": [
+        ev("search", recent), ev("search", recent),
+        ev("restaurant_detail", recent), ev("search", old),
+    ]})
+
+    response = client.get(
+        "/api/v1/analytics/searches-by-weekday",
+        params={"days": 28, "tzOffsetMinutes": 0},
+    )
+    assert response.status_code == 200
+    report = response.json()
+    assert report["question"] == "Which days of the week have the highest number of restaurant searches?"
+    assert report["days"] == 28
+    assert report["totalSearches"] == 2
+    assert [day["dayOfWeek"] for day in report["byDay"]] == list(range(7))
+    by_day = {day["dayOfWeek"]: day["searches"] for day in report["byDay"]}
+    assert by_day[recent.weekday()] == 2
+
+
+def test_searches_by_weekday_uses_local_weekday_boundaries(client):
+    from datetime import datetime, timezone
+    from app.db import connect
+    from app.repositories.telemetry_repository import TelemetryRepository
+    from app.services.analytics_service import AnalyticsService
+
+    def ev(occurred_at):
+        e = event(0)
+        e["screen"] = "search"
+        e["occurredAt"] = occurred_at
+        return e
+
+    client.post("/api/v1/telemetry/page-loads", json={"events": [
+        ev("2026-10-05T04:30:00Z"),  # Sunday 23:30 in Bogota
+        ev("2026-10-05T05:30:00Z"),  # Monday 00:30 in Bogota
+    ]})
+
+    conn = connect()
+    try:
+        service = AnalyticsService(TelemetryRepository(conn))
+        report = service.searches_by_weekday(
+            days=7,
+            tz_offset_minutes=-300,
+            now=datetime(2026, 10, 6, tzinfo=timezone.utc),
+        )
+    finally:
+        conn.close()
+
+    by_day = {day.day_of_week: day.searches for day in report.by_day}
+    assert report.total_searches == 2
+    assert by_day[0] == 1  # Monday
+    assert by_day[6] == 1  # Sunday
+    assert [day.day_of_week for day in report.by_day] == list(range(7))

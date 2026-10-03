@@ -291,3 +291,18 @@ class RatingUsageReport(ApiModel):
     months: int
     tz_offset_minutes: int
     by_month: list[MonthlyRatingUsage]  # un elemento por mes de la ventana, del mas antiguo al actual (0 si no hubo)
+
+
+# ---------- BQ12: selecciones de restaurantes por dia de la semana ----------
+
+class WeekdaySearchCount(ApiModel):
+    day_of_week: int          # 0 = Monday ... 6 = Sunday
+    day_name: str
+    searches: int
+
+class SearchesByWeekdayReport(ApiModel):
+    question: str
+    days: int
+    tz_offset_minutes: int
+    total_searches: int
+    by_day: list[WeekdaySearchCount]  # siempre de lunes a domingo

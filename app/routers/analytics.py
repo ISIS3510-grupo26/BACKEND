@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from app.config import settings
 from app.db import get_conn
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import (FailedRequestsReport, MonthlyActiveFavoritersReport, RatingUsageReport, SlowLoadsReport, SpotViewsByHourReport)
+from app.schemas import (FailedRequestsReport, MonthlyActiveFavoritersReport, RatingUsageReport, SlowLoadsReport, SpotViewsByHourReport, SearchesByWeekdayReport)
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
@@ -74,3 +74,14 @@ def rating_usage(
 ):
     """BQ10 (tipo 3): % de usuarios que, habiendo visto paginas de restaurantes en el mes, publicaron una calificacion."""
     return service.rating_usage(months=months, tz_offset_minutes=tz_offset_minutes, platform=platform)
+
+
+@router.get("/searches-by-weekday", response_model=SearchesByWeekdayReport)
+def searches_by_weekday(
+    days: int = Query(28, ge=1, le=365, description="Ventana movil de dias hacia atras"),
+    tz_offset_minutes: int = Query(settings.campus_tz_offset_minutes, alias="tzOffsetMinutes", ge=-840, le=840),
+    platform: str | None = Query(None),
+    service: AnalyticsService = Depends(get_service),
+):
+    """BQ12: cuenta las selecciones de restaurantes desde resultados de busqueda por dia de la semana."""
+    return service.searches_by_weekday(days=days, tz_offset_minutes=tz_offset_minutes, platform=platform)
