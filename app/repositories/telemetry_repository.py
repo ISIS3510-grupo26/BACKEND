@@ -155,3 +155,27 @@ class TelemetryRepository:
             f"FROM page_load_events e WHERE {where} AND e.success = 0 GROUP BY key ORDER BY hits DESC",
             [total, *params],
         ).fetchall()
+
+    def searches_by_weekday(self, tz_offset_minutes: int, since: datetime, until: datetime,
+                            platform: str | None = None) -> list[sqlite3.Row]:
+        """BQ12: cuenta selecciones desde resultados de busqueda por dia local.
+
+        SQLite devuelve domingo = 0; esta expresion convierte el resultado a lunes = 0.
+        """
+        local_day = "(CAST(strftime('%w', occurred_at, ? || ' minutes') AS INTEGER) + 6) % 7"
+        clauses = [
+            "screen = ?",
+            "spot_id IS NOT NULL",
+            "occurred_at >= ?",
+            "occurred_at < ?",
+        ]
+        params: list = [str(tz_offset_minutes), SEARCH_SCREEN, _iso(since), _iso(until)]
+        if platform:
+            clauses.append("platform = ?")
+            params.append(platform)
+        return self.conn.execute(
+            f"SELECT {local_day} AS day_of_week, COUNT(*) AS searches "
+            f"FROM page_load_events WHERE {' AND '.join(clauses)} "
+            "GROUP BY day_of_week ORDER BY day_of_week",
+            params,
+        ).fetchall()

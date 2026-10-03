@@ -4,13 +4,15 @@ from datetime import datetime, timedelta, timezone
 from app.repositories.telemetry_repository import TelemetryRepository
 from app.schemas import (FailedRequestsReport, FailureGroup, HourlyRanking, MonthlyActiveFavoritersReport,
                          MonthlyFavoriters, MonthlyRatingUsage, RatingUsageReport, SlowLoadGroup, SlowLoadsReport,
-                         SpotHourlyActivity, SpotViewsByHourReport)
+                         SpotHourlyActivity, SpotViewsByHourReport, SearchesByWeekdayReport, WeekdaySearchCount)
 
 Q_SLOW = "What is the percentage of restaurant page loads that take more than {s:g} seconds? By device and OS"
 Q_FAILED = "What is the percentage of failed requests when loading the restaurant's information?"
 Q_VIEWS_BY_HOUR = "Which restaurants receive the highest number of page views and searches during each hour?"
 Q_MONTHLY_FAVORITERS = "How many active users add one or more restaurants to their favorites each month?"
 Q_RATING_USAGE = "What percentage of users use the restaurant rating feature when looking at a restaurant's page?"
+Q_SEARCHES_BY_WEEKDAY = "Which days of the week have the highest number of restaurant searches?"
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
 def _pct(part: int, total: int) -> float:
@@ -142,3 +144,29 @@ class AnalyticsService:
                                                rating_usage_percentage=_pct(raters, viewers)))
         return RatingUsageReport(question=Q_RATING_USAGE, months=months, tz_offset_minutes=tz_offset_minutes,
                                  by_month=by_month)
+
+    def searches_by_weekday(self, days: int, tz_offset_minutes: int, now: datetime | None = None,
+                            platform: str | None = None) -> SearchesByWeekdayReport:
+        """BQ12: cuenta selecciones desde resultados de busqueda en los ultimos `days` dias."""
+        now = now or datetime.now(timezone.utc)
+        counts = [0] * 7
+        rows = self.repo.searches_by_weekday(
+            tz_offset_minutes,
+            since=now - timedelta(days=days),
+            until=now,
+            platform=platform,
+        )
+        for row in rows:
+            counts[int(row["day_of_week"])] = int(row["searches"])
+
+        return SearchesByWeekdayReport(
+            question=Q_SEARCHES_BY_WEEKDAY,
+            days=days,
+            tz_offset_minutes=tz_offset_minutes,
+            total_searches=sum(counts),
+            by_day=[
+                WeekdaySearchCount(day_of_week=i, day_name=name, searches=counts[i])
+                for i, name in enumerate(WEEKDAYS)
+            ],
+        )
+
