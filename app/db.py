@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS reviews (
     stars         INTEGER NOT NULL,
     text          TEXT NOT NULL,
     dined_ago     TEXT NOT NULL,
-    helpful_count INTEGER NOT NULL DEFAULT 
-    user_id       TEXT,                     -- NULL = resena del catalogo; con valor = la escribio ese usuario (BQ10)
+    helpful_count INTEGER NOT NULL DEFAULT 0,
+    user_id       TEXT,                   -- NULL = resena del catalogo; con valor = la escribio ese usuario (BQ10)
     created_at    TEXT                      -- UTC, solo en las resenas de usuarios
 );
 

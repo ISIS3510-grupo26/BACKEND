@@ -465,3 +465,64 @@ def test_telemetry_with_token_and_dev_override(client):
     r = client.get("/api/v1/analytics/monthly-active-favoriters", params={"months": 1}).json()
     assert (r["byMonth"][0]["activeFavoriters"], r["byMonth"][0]["favoriteEvents"]) == (2, 3)
     assert client.get("/api/v1/analytics/failed-requests").json()["totalRequests"] == 1
+
+
+# ---------- BQ3: mejor calificados cerca que el usuario no ha probado ----------
+
+def test_nearby_picks_sorted_by_rating_then_distance(client):
+    r = client.get("/api/v1/users/ana/recommendations/nearby", params={**NITRO, "limit": 20})
+    assert r.status_code == 200
+    body = r.json()
+    # El Vagon (4.5, 139 m) esta mas cerca que Conda de Bons (5.0, 141 m): manda el rating, no la distancia.
+    assert [p["id"] for p in body] == ["nitro-coffee", "conda-de-bons", "la-esquina-burger-lab",
+                                       "poodle-pizza-slices", "el-vagon-street-food", "green-bowl-co",
+                                       "taqueria-la-esquina"]
+    assert set(body[0]) == {"id", "name", "emoji", "rating", "latitude", "longitude",
+                            "distanceMeters", "walkMinutes"}
+    assert body[0]["distanceMeters"] == 0 and body[0]["walkMinutes"] == 0.0
+    conda = body[1]  # ~141 m en linea recta -> ~1.8 min a 80 m/min
+    assert 130 <= conda["distanceMeters"] <= 150 and conda["walkMinutes"] == round(conda["distanceMeters"] / 80, 1)
+    # Entre los dos de 4.0 estrellas gana el mas cercano.
+    assert [p["walkMinutes"] for p in body[-2:]] == sorted(p["walkMinutes"] for p in body[-2:])
+
+    assert [p["id"] for p in client.get("/api/v1/users/ana/recommendations/nearby",
+                                        params={**NITRO, "limit": 3}).json()] == [p["id"] for p in body[:3]]
+    # Sin limit explicito devuelve 5.
+    assert len(client.get("/api/v1/users/ana/recommendations/nearby", params=NITRO).json()) == 5
+
+
+def test_nearby_picks_hide_spots_already_reviewed(client):
+    s = signup(client)
+    me, token = s["userId"], bearer(s["accessToken"])
+    url = f"/api/v1/users/{me}/recommendations/nearby"
+    assert [p["id"] for p in client.get(url, params={**NITRO, "limit": 2}, headers=token).json()] \
+        == ["nitro-coffee", "conda-de-bons"]
+
+    review = client.post("/api/v1/spots/nitro-coffee/reviews", json={"stars": 5, "text": "Muy bueno"}, headers=token)
+    assert review.status_code == 201, review.text
+
+    picks = client.get(url, params={**NITRO, "limit": 2}, headers=token).json()
+    assert [p["id"] for p in picks] == ["conda-de-bons", "la-esquina-burger-lab"]
+    # Probado es por usuario: las resenas del catalogo no ocultan nada y otra cuenta lo sigue viendo.
+    assert [p["id"] for p in client.get("/api/v1/users/dev-camilo/recommendations/nearby",
+                                        params={**NITRO, "limit": 1}).json()] == ["nitro-coffee"]
+
+
+def test_nearby_picks_max_walk_minutes(client):
+    # 1 min a 80 m/min = 80 m: solo el restaurante donde esta parado el usuario.
+    near = client.get("/api/v1/users/ana/recommendations/nearby",
+                      params={**NITRO, "maxWalkMinutes": 1, "limit": 20}).json()
+    assert [p["id"] for p in near] == ["nitro-coffee"]
+    lejos = client.get("/api/v1/users/ana/recommendations/nearby",
+                       params={"lat": 4.7, "lng": -74.0658, "maxWalkMinutes": 15}).json()
+    assert lejos == []
+
+
+def test_nearby_picks_validation(client):
+    url = "/api/v1/users/ana/recommendations/nearby"
+    assert client.get(url, params={"lat": 4.6}).status_code == 422
+    assert client.get(url, params={"lat": 91, "lng": 0}).status_code == 422
+    assert client.get(url, params={"lat": "norte", "lng": 0}).status_code == 422
+    assert client.get(url, params={**NITRO, "maxWalkMinutes": 0}).status_code == 422
+    assert client.get(url, params={**NITRO, "limit": 0}).status_code == 422
+    assert client.get(url, params={**NITRO, "limit": 21}).status_code == 422

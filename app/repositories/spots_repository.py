@@ -88,7 +88,20 @@ class SpotsRepository:
         )
         row = self.conn.execute("SELECT rating, total_reviews FROM spots WHERE id = ?", (spot_id,)).fetchone()
         return {"rating": row["rating"], "total_reviews": row["total_reviews"]}
-    
+
+    def spots_with_location(self) -> list[dict]:
+        """BQ3: candidatos del pipeline. Los que no tienen coordenadas se omiten (no se pueden ubicar en el mapa)."""
+        rows = self.conn.execute(
+            "SELECT id, name, emoji, rating, latitude, longitude FROM spots "
+            "WHERE latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY id"
+        ).fetchall()
+        return [_row_to_dict(r) for r in rows]
+
+    def reviewed_spot_ids(self, user_id: str) -> set[str]:
+        """BQ3: restaurantes que el usuario ya probo, es decir donde dejo una resena suya."""
+        rows = self.conn.execute("SELECT spot_id FROM reviews WHERE user_id = ?", (user_id,)).fetchall()
+        return {r["spot_id"] for r in rows}
+
     def sync_catalog(self) -> None:
         """Carga el catalogo de seed_spots.json, que es su unica fuente (la API no escribe restaurantes).
 
