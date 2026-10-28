@@ -129,6 +129,18 @@
       }),
     },
     {
+      bq: 'BQ6', author: 'Lucas Galindo', endpoint: '/api/v1/recommendations/best-for-you?freshMinutes=120&limit=5',
+      render: r => {
+        const top = r.spots[0];
+        const wait = s => (s.isRecent && s.waitMinutes !== null ? s.waitMinutes : 0);
+        return {
+          key: top ? `${top.emoji} ${top.name}` : '—',
+          label: top && top.isRecent ? `shortest reported wait right now: ${top.waitMinutes} min` : 'no recent wait reports yet',
+          chart: { type: 'bar', label: 'Reported wait (min)', labels: r.spots.map(s => s.name), values: r.spots.map(wait) },
+        };
+      },
+    },
+    {
       bq: 'BQ7', author: 'Camilo Linares', endpoint: '/api/v1/analytics/monthly-active-favoriters?months=12',
       render: r => ({
         key: last(r.byMonth).activeFavoriters,
