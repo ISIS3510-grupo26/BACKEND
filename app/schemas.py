@@ -1,4 +1,5 @@
 """Contratos JSON de la API (DTOs). Se exponen en camelCase para todos los clientes."""
+import unicodedata
 from datetime import datetime
 from typing import Literal
 
@@ -22,15 +23,26 @@ class CredentialsIn(ApiModel):
         return v.strip().lower() if isinstance(v, str) else v
 
 
+PASSWORD_MIN_CHARS = 8
+PASSWORD_MAX_CHARS = 128
+
+
+def check_new_password(v: str) -> str:
+    """Regla unica para contraseñas nuevas: 8 a 128 caracteres contados despues de normalizar con NFKC, como code
+    points (un emoji cuenta como 1 caracter, no como sus 4 bytes). No hay limite en bytes: auth_service hace un
+    pre-hash antes de bcrypt. El front Flutter cuenta igual (password_rules.dart)."""
+    if not PASSWORD_MIN_CHARS <= len(unicodedata.normalize("NFKC", v)) <= PASSWORD_MAX_CHARS:
+        raise ValueError(f"password must have {PASSWORD_MIN_CHARS} to {PASSWORD_MAX_CHARS} characters")
+    return v
+
+
 class SignupIn(CredentialsIn):
-    password: str = Field(min_length=8, max_length=72)
+    password: str
 
     @field_validator("password")
     @classmethod
-    def fits_bcrypt(cls, v: str) -> str:
-        if len(v.encode()) > 72:  # bcrypt ignora lo que pase de 72 bytes: mejor rechazarlo que truncarlo
-            raise ValueError("password must be at most 72 bytes")
-        return v
+    def password_rule(cls, v: str) -> str:
+        return check_new_password(v)
 
 
 class LoginIn(CredentialsIn):
@@ -53,14 +65,12 @@ class UserOut(ApiModel):
 
 class ChangePasswordIn(ApiModel):
     current_password: str = Field(min_length=1, max_length=128)
-    new_password: str = Field(min_length=8, max_length=72)
+    new_password: str
 
     @field_validator("new_password")
     @classmethod
-    def fits_bcrypt(cls, v: str) -> str:
-        if len(v.encode()) > 72:
-            raise ValueError("password must be at most 72 bytes")
-        return v
+    def password_rule(cls, v: str) -> str:
+        return check_new_password(v)
 
 
 # ---------- Catalogo de restaurantes ----------
