@@ -2,8 +2,8 @@
 from datetime import datetime, timedelta, timezone
 
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import (FailedRequestsReport, FailureGroup, HourlyRanking, MonthlyActiveFavoritersReport,
-                         MonthlyFavoriters, MonthlyRatingUsage, RatingUsageReport, SlowLoadGroup, SlowLoadsReport,
+from app.schemas import (FailedRequestsReport, FailureGroup, HourlyRanking, MapDisplayIssuesReport, MapDisplayStats,
+                         MonthlyActiveFavoritersReport, MonthlyFavoriters, MonthlyMapDisplay, MonthlyRatingUsage, RatingUsageReport, SlowLoadGroup, SlowLoadsReport,
                          SpotHourlyActivity, SpotViewsByHourReport, SearchesByWeekdayReport, WeekdaySearchCount)
 
 Q_SLOW = "What is the percentage of restaurant page loads that take more than {s:g} seconds? By device and OS"
@@ -12,11 +12,22 @@ Q_VIEWS_BY_HOUR = "Which restaurants receive the highest number of page views an
 Q_MONTHLY_FAVORITERS = "How many active users add one or more restaurants to their favorites each month?"
 Q_RATING_USAGE = "What percentage of users use the restaurant rating feature when looking at a restaurant's page?"
 Q_SEARCHES_BY_WEEKDAY = "Which days of the week have the highest number of restaurant searches?"
+Q_MAP_DISPLAY = ("How many times does the app display the restaurant's location incorrectly on the map or not at all, "
+                 "and should the map feature be improved or changed based on this?")
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
 def _pct(part: int, total: int) -> float:
     return round(100.0 * part / total, 2) if total else 0.0
+
+
+def _map_stats(loads: int, issues_by_type: dict[str, int]) -> MapDisplayStats:
+    """Totales de BQ14 para un mes o para toda la ventana. El tipo principal es el de mas problemas (empate: alfabetico)."""
+    by_type = dict(sorted(issues_by_type.items(), key=lambda kv: (-kv[1], kv[0])))
+    issues = sum(by_type.values())
+    return MapDisplayStats(map_loads=loads, issues=issues,
+                           issue_percentage=round(100.0 * issues / loads, 1) if loads else 0.0,
+                           issues_by_type=by_type, main_issue=next(iter(by_type), None))
 
 
 class AnalyticsService:
@@ -170,3 +181,35 @@ class AnalyticsService:
             ],
         )
 
+    def map_display_issues(self, months: int, tz_offset_minutes: int, max_issue_percentage: float,
+                           now: datetime | None = None) -> MapDisplayIssuesReport:
+        """BQ14 (tipo *): cuantas veces el mapa no muestra la ubicacion del restaurante o la muestra mal.
+
+        Por mes calendario (hora local) y en toda la ventana: cargas del mapa, problemas, % y problemas por tipo.
+        Recomendacion: 'improve' si el % de toda la ventana supera `max_issue_percentage`, si no 'keep'.
+        Devuelve los `months` meses hasta el actual, incluidos los que no tuvieron cargas (en 0).
+        """
+        now = now or datetime.now(timezone.utc)
+        local = now.astimezone(timezone.utc) + timedelta(minutes=tz_offset_minutes)
+        index = local.year * 12 + local.month - 1
+        window = [f"{i // 12:04d}-{i % 12 + 1:02d}" for i in range(index - months + 1, index + 1)]
+        loads = {m: 0 for m in window}
+        issues: dict[str, dict[str, int]] = {m: {} for m in window}
+        for r in self.repo.map_display_by_month(tz_offset_minutes, window[0], window[-1]):
+            loads[r["month"]] += r["loads"]
+            if r["issues"]:
+                issues[r["month"]][r["issue_type"]] = issues[r["month"]].get(r["issue_type"], 0) + r["issues"]
+        overall_by_type: dict[str, int] = {}
+        for month_issues in issues.values():
+            for kind, count in month_issues.items():
+                overall_by_type[kind] = overall_by_type.get(kind, 0) + count
+        overall = _map_stats(sum(loads.values()), overall_by_type)
+        return MapDisplayIssuesReport(
+            **overall.model_dump(),
+            question=Q_MAP_DISPLAY,
+            months=months,
+            tz_offset_minutes=tz_offset_minutes,
+            max_issue_percentage=max_issue_percentage,
+            recommendation="improve" if overall.issue_percentage > max_issue_percentage else "keep",
+            by_month=[MonthlyMapDisplay(month=m, **_map_stats(loads[m], issues[m]).model_dump()) for m in window],
+        )

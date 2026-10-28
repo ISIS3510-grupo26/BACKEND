@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from app.config import settings
 from app.db import get_conn
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import (FailedRequestsReport, MonthlyActiveFavoritersReport, RatingUsageReport, SlowLoadsReport, SpotViewsByHourReport, SearchesByWeekdayReport)
+from app.schemas import (FailedRequestsReport, MapDisplayIssuesReport, MonthlyActiveFavoritersReport, RatingUsageReport, SlowLoadsReport, SpotViewsByHourReport, SearchesByWeekdayReport)
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
@@ -85,3 +85,16 @@ def searches_by_weekday(
 ):
     """BQ12: cuenta las selecciones de restaurantes desde resultados de busqueda por dia de la semana."""
     return service.searches_by_weekday(days=days, tz_offset_minutes=tz_offset_minutes, platform=platform)
+
+
+@router.get("/map-display-issues", response_model=MapDisplayIssuesReport)
+def map_display_issues(
+    months: int = Query(3, ge=1, le=36, description="Meses calendario hacia atras, incluido el actual"),
+    tz_offset_minutes: int = Query(settings.campus_tz_offset_minutes, alias="tzOffsetMinutes", ge=-840, le=840),
+    max_issue_percentage: float = Query(10, alias="maxIssuePercentage", ge=0, le=100,
+                                        description="Por encima de este % de problemas se recomienda mejorar el mapa"),
+    service: AnalyticsService = Depends(get_service),
+):
+    """BQ14 (tipo *): cargas del mapa con la ubicacion mal o sin mostrar, por mes, y si conviene mejorar el mapa."""
+    return service.map_display_issues(months=months, tz_offset_minutes=tz_offset_minutes,
+                                      max_issue_percentage=max_issue_percentage)

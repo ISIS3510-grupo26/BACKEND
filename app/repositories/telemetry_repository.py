@@ -7,6 +7,8 @@ from app.schemas import PageLoadEventIn
 RESTAURANT_SCREEN = "restaurant_detail"
 SEARCH_SCREEN = "search"  # el usuario eligio un restaurante desde el buscador
 FAVORITE_SCREEN = "favorite_added"  # el usuario guardo un restaurante (BQ7)
+MAP_SCREEN = "map_display"  # BQ14: una carga del mapa (Taste Map) o una falla de sus imagenes
+TILES_FAILED = "tiles_failed"  # el unico error_type de map_display que no es una carga nueva
 
 # Columnas por las que se permite agrupar (lista blanca: nunca se interpola input del usuario).
 GROUP_EXPRESSIONS = {
@@ -146,6 +148,23 @@ class TelemetryRepository:
             params,
         ).fetchall()
         
+    def map_display_by_month(self, tz_offset_minutes: int, first_month: str, last_month: str) -> list[sqlite3.Row]:
+        """BQ14: por mes local y error_type, cargas del mapa y problemas.
+
+        Carga = evento map_display cuyo error_type no es tiles_failed (la app manda uno por carga).
+        Problema = evento map_display con success = 0, incluido tiles_failed (las imagenes del mapa fallaron).
+        """
+        local_month = "strftime('%Y-%m', occurred_at, ? || ' minutes')"
+        clauses = ["screen = ?", f"{local_month} BETWEEN ? AND ?"]
+        params: list = [str(tz_offset_minutes), TILES_FAILED, MAP_SCREEN, str(tz_offset_minutes), first_month, last_month]
+        return self.conn.execute(
+            f"SELECT {local_month} AS month, COALESCE(error_type, 'UNKNOWN') AS issue_type, "
+            "SUM(CASE WHEN error_type IS NULL OR error_type != ? THEN 1 ELSE 0 END) AS loads, "
+            "SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) AS issues "
+            f"FROM page_load_events WHERE {' AND '.join(clauses)} GROUP BY month, issue_type ORDER BY month",
+            params,
+        ).fetchall()
+
     def failures_by_error_type(self, **filters) -> list[sqlite3.Row]:
         """Reparte las fallas por tipo de error; el porcentaje es sobre el total de intentos."""
         where, params = self._where(only_success=False, **filters)
