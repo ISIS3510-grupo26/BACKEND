@@ -11,8 +11,10 @@ _SPOT_COLUMNS = (
     "price", "distance", "walk_minutes", "is_budget", "is_vegetarian", "is_high_protein",
     "affinity_percent", "category", "note_label", "note", "uni_card_perk", "total_reviews",
 )
-# Se escriben al sembrar pero no se exponen en /spots (las usa la BQ5 en el servidor).
+# Coordenadas: las usan la BQ5 y la BQ3 en el servidor, y el mapa de la app Kotlin para ubicar los pines.
 _GEO_COLUMNS = ("latitude", "longitude")
+# Lo que se lee para responder /spots, /spots/{id} y los favoritos.
+_PUBLIC_COLUMNS = (*_SPOT_COLUMNS, *_GEO_COLUMNS)
 _BOOL_COLUMNS = {"is_budget", "is_vegetarian", "is_high_protein", "is_student_pick"}
 # Las cambian las resenas de los usuarios
 _RATING_COLUMNS = ("rating", "total_reviews")
@@ -37,13 +39,13 @@ class SpotsRepository:
         self.conn = conn
 
     def list_spots(self) -> list[dict]:
-        rows = self.conn.execute(f"SELECT {', '.join(_SPOT_COLUMNS)} FROM spots ORDER BY rowid").fetchall()
+        rows = self.conn.execute(f"SELECT {', '.join(_PUBLIC_COLUMNS)} FROM spots ORDER BY rowid").fetchall()
         return [_row_to_dict(r) for r in rows]
 
     def list_favorite_spots(self, user_id: str) -> list[dict]:
         """Restaurantes guardados por el usuario, en el orden en que los guardo."""
         rows = self.conn.execute(
-            f"SELECT {', '.join('s.' + c for c in _SPOT_COLUMNS)} FROM favorites f JOIN spots s ON s.id = f.spot_id "
+            f"SELECT {', '.join('s.' + c for c in _PUBLIC_COLUMNS)} FROM favorites f JOIN spots s ON s.id = f.spot_id "
             "WHERE f.user_id = ? ORDER BY f.rowid",
             (user_id,),
         ).fetchall()
@@ -51,7 +53,7 @@ class SpotsRepository:
 
     def get_spot(self, spot_id: str) -> dict | None:
         row = self.conn.execute(
-            f"SELECT {', '.join(_SPOT_COLUMNS)} FROM spots WHERE id = ?", (spot_id,)
+            f"SELECT {', '.join(_PUBLIC_COLUMNS)} FROM spots WHERE id = ?", (spot_id,)
         ).fetchone()
         if row is None:
             return None
@@ -111,7 +113,7 @@ class SpotsRepository:
         reemplazan completos.Excepción: las reseñas de usuarios (user_id no nulo) y el rating/total_reviews
         que ellas cambiaron no se tocan, si no cada reinicio del servidor borraria lo que publicaron."""
         spots = json.loads(SEED_FILE.read_text(encoding="utf-8"))
-        columns = (*_SPOT_COLUMNS, *_GEO_COLUMNS)
+        columns = _PUBLIC_COLUMNS
         upsert = (
             f"INSERT INTO spots ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))}) "
             f"ON CONFLICT(id) DO UPDATE SET "

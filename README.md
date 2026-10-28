@@ -10,6 +10,7 @@ Sirve el catálogo de restaurantes y recibe la telemetría con la que se respond
 | BQ3 | Which restaurants receive the highest number of page views and searches during each hour? | `GET /api/v1/analytics/spot-views-by-hour` |
 | BQ3 | What are the nearest restaurants with the highest average rating that the user hasn't tried yet? | `GET /api/v1/users/{userId}/recommendations/nearby?lat=&lng=&maxWalkMinutes=15&limit=5` |
 | BQ5 | Which restaurants in the user's favorites are open now and within a 15-minute walk? | `GET /api/v1/users/{userId}/favorites/nearby?lat=&lng=&maxWalkMinutes=15` |
+| BQ6 | Which restaurants have the shortest waiting time and the best match with my taste profile? | `GET /api/v1/recommendations/best-for-you?freshMinutes=120` |
 | BQ7 | How many active users add one or more restaurants to their favorites each month? | `GET /api/v1/analytics/monthly-active-favoriters` |
 | BQ10 | What percentage of users use the restaurant rating feature when looking at a restaurant's page? | `GET /api/v1/analytics/rating-usage?months=6` |
 | BQ14 | How many times does the app display the restaurant's location incorrectly on the map or not at all, and should the map feature be improved or changed based on this? | `GET /api/v1/analytics/map-display-issues?months=3&maxIssuePercentage=10` |
@@ -44,6 +45,14 @@ la ubicación de los restaurantes o la muestra mal, y recomienda mejorar o mante
 calendario hacia atrás incluido el actual, por defecto 3, máx. 36), `tzOffsetMinutes` y `maxIssuePercentage`
 (por defecto 10, de 0 a 100): si el porcentaje de problemas de toda la ventana lo supera, `recommendation` es
 `improve`; si no, `keep`. Todos los datos para la BQ14 salen de la tabla `page_load_events`; no hay tabla nueva.
+
+BQ6 es de **tipo 2** y alimenta la sección **"Best for you right now"** del feed *For You* en la app Kotlin, que
+reemplaza el porcentaje de *Taste Match* que antes venía escrito a mano en el catálogo. Junta dos cosas: el último
+tiempo de espera que reportaron los estudiantes (los mismos datos de la BQ4) y el perfil de gusto. Acepta
+`freshMinutes` (por defecto 120: un reporte más viejo no cuenta), `limit` (opcional, de 1 a 50; sin él devuelve todo el
+catálogo ordenado) y el perfil, todo opcional: `budget`, `dietary` y `cuisines` (estos dos se pueden repetir).
+**La app Kotlin no manda el perfil**: lo guarda en el celular (DataStore), así el perfil funciona sin red y no sale
+del teléfono. Pide la lista sin perfil y calcula la compatibilidad en el celular con la misma fórmula.
 
 Todas las BQ del equipo se ven juntas en el **[Dashboard](#dashboard)** (`GET /dashboard`).
 
@@ -93,6 +102,7 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | DELETE | `/api/v1/users/{userId}/favorites/{spotId}` | Quitar de guardados (idempotente, `204`) |
 | GET | `/api/v1/users/{userId}/favorites/nearby` | BQ5 (favoritos abiertos ahora y a ≤ `maxWalkMinutes` caminando) |
 | GET | `/api/v1/users/{userId}/recommendations/nearby` | BQ3 (mejor calificados a ≤ `maxWalkMinutes` caminando que el usuario no ha probado) |
+| GET | `/api/v1/recommendations/best-for-you` | BQ6 (menos espera según la BQ4 + compatibilidad con el perfil de gusto; el perfil es opcional) |
 | GET | `/health` | Health check |
 
 ### Autenticación
@@ -163,6 +173,16 @@ Contrato del evento de telemetría (cualquier front debe enviarlo igual):
   los que empatan, el más cercano; se descartan los que superan `maxWalkMinutes` y los que no tienen coordenadas.
   Está implementado como un *pipeline* de pipes and filters (`app/services/recommendations_service.py`): cada paso
   (`exclude_tried`, `add_distance`, `within_walk`, `rank`) recibe una lista y devuelve otra.
+- BQ6: *Puntaje de espera* (0–100) = `100 × (1 − minutos / 40)`, con piso en 0, sobre el reporte más nuevo de
+  `wait_time_reports`; si el reporte es más viejo que `freshMinutes` o no hay ninguno vale **50** (neutro: no se sabe
+  cómo está la fila). *Compatibilidad* (0–100) = puntos ganados / puntos posibles, contando solo lo que el perfil
+  llenó: cocina 50 (alguna cocina favorita aparece en el tipo de comida o el nombre: "Artisan Burgers" → `burger`,
+  "Crepas & Bowls" → `bowl`/`crepa`, "Specialty Coffee" → `coffee`/`café`, "Asian Wok" → `wok`/`asian`), dieta 30
+  (si el perfil pide Vegetarian o Vegan, el restaurante tiene que ser vegetariano) y presupuesto 20 (solo
+  "Budget-friendly" exige `is_budget`). Si nada aplica vale 50. *Puntaje* = 0,5 × espera + 0,5 × compatibilidad (sin
+  perfil, solo la espera). Orden: puntaje de mayor a menor; si empatan, la espera conocida más corta y después el
+  mejor calificado. Igual que la BQ3, es un pipeline de pipes and filters (`app/services/best_for_you_service.py`:
+  `add_wait`, `add_taste`, `add_score`, `rank`).
 - BQ7: *usuario activo que agrega favoritos* = `userId` distinto con al menos un evento `screen=favorite_added` en el
   mes calendario local (`occurredAt` desplazado con `tzOffsetMinutes`): `COUNT(DISTINCT userId)` por mes. Se reporta
   también el total de eventos del mes. Los meses sin actividad salen en `0`. BQ1/BQ2/BQ3 ignoran estos eventos.
@@ -257,7 +277,7 @@ Una sola página con **todas** las business questions del equipo, leída de la m
 endpoints `/api/v1/analytics/...` (no consulta la base directamente). Con el backend corriendo, abrir
 **http://localhost:8000/dashboard** en el navegador.
 
-- Una tarjeta por BQ: BQ1 y BQ2 (Tomas Diaz), BQ7 (Camilo Linares), BQ10 (Gabriela Perdomo), BQ11 (Lucas Galindo),
+- Una tarjeta por BQ: BQ1 y BQ2 (Tomas Diaz), BQ6 (Lucas Galindo), BQ7 (Camilo Linares), BQ10 (Gabriela Perdomo), BQ11 (Lucas Galindo),
   BQ12 (Alejandro Vides) y BQ14 (Esteban Alvarado), con la pregunta, el número clave y un gráfico simple. La BQ14
   muestra los problemas por tipo, el % de cada mes y la recomendación (`IMPROVE` / `KEEP`) en grande.
 - Botón **Refresh** y actualización automática cada 30 s. Si un endpoint falla, solo su tarjeta muestra el error.

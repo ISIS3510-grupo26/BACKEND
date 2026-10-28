@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 
 from app.db import connect, init_db
 from app.repositories.spots_repository import SpotsRepository
-from app.routers import analytics, auth, spots, telemetry, users
+from app.routers import analytics, auth, best_for_you, spots, telemetry, users
 
 
 @asynccontextmanager
@@ -32,6 +32,7 @@ app.include_router(spots.router)
 app.include_router(telemetry.router)
 app.include_router(analytics.router)
 app.include_router(users.router)
+app.include_router(best_for_you.router)
 
 
 @app.get("/health", tags=["health"])

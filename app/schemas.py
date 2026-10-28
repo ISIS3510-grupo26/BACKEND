@@ -114,6 +114,8 @@ class SpotSummaryOut(ApiModel):
     note: str
     uni_card_perk: str | None = None
     total_reviews: int
+    latitude: float | None = None   # WGS84; con esto el mapa del front pone cada pin en su sitio
+    longitude: float | None = None
     
     @field_validator("rating")
     @classmethod
@@ -348,6 +350,40 @@ class LastWaitTimesReport(ApiModel):
     question: str
     fresh_minutes: int
     spots: list[LastWaitTime]  # todos los restaurantes, en el orden del catalogo
+
+
+# ---------- BQ6: menor tiempo de espera y mayor compatibilidad con el perfil de gusto ----------
+
+class BestForYouSpot(ApiModel):
+    rank: int
+    spot_id: str
+    name: str
+    emoji: str
+    cuisine: str               # primera parte del subtitulo ("Burgers & Fries")
+    rating: float
+    is_budget: bool
+    is_vegetarian: bool
+    is_high_protein: bool
+    wait_minutes: int | None   # ultimo tiempo reportado (BQ4); None si nadie ha reportado
+    minutes_ago: int | None
+    is_recent: bool            # dentro de freshMinutes; si no, la espera no cuenta en el puntaje
+    recent_reports: int
+    wait_score: int            # 0-100: menos espera, mas puntos
+    taste_match: int | None    # 0-100 con el perfil que llego en la peticion; None si no llego perfil
+    score: float               # criterio del ranking
+
+    @field_validator("rating")
+    @classmethod
+    def one_decimal(cls, v: float) -> float:
+        return round(v, 1)
+
+
+class BestForYouReport(ApiModel):
+    question: str
+    fresh_minutes: int
+    max_wait_minutes: int      # desde esta espera wait_score ya es 0
+    personalized: bool         # True si la peticion traia perfil de gusto
+    spots: list[BestForYouSpot]  # del mejor al peor
 
 
 # ---------- BQ14: problemas al mostrar el mapa de restaurantes ----------
