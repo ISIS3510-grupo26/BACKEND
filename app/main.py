@@ -1,8 +1,10 @@
 """Punto de entrada del backend CampusBites."""
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 from app.db import connect, init_db
 from app.repositories.spots_repository import SpotsRepository
@@ -35,3 +37,12 @@ app.include_router(users.router)
 @app.get("/health", tags=["health"])
 def health():
     return {"status": "ok"}
+
+
+DASHBOARD = Path(__file__).parent / "static" / "dashboard.html"
+
+
+@app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+def dashboard():
+    """Dashboard del equipo: una tarjeta por business question, leida de los endpoints /api/v1/analytics."""
+    return HTMLResponse(DASHBOARD.read_text(encoding="utf-8"))

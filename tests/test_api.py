@@ -592,3 +592,84 @@ def test_searches_by_weekday_uses_local_weekday_boundaries(client):
     assert by_day[0] == 1  # Monday
     assert by_day[6] == 1  # Sunday
     assert [day.day_of_week for day in report.by_day] == list(range(7))
+
+# ---------- BQ14: problemas al mostrar el mapa ----------
+
+def map_event(success, error=None, occurred_at=None):
+    from datetime import datetime, timezone
+    e = event(800, success=success, error=error, spot=None)
+    e.update(screen="map_display", platform="flutter", httpStatus=None,
+             occurredAt=occurred_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    return e
+
+
+def test_map_display_issues(client):
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    month = lambda dt: (dt + timedelta(minutes=-300)).strftime("%Y-%m")
+    before = now - timedelta(days=35)
+    last_month = before.strftime("%Y-%m-%dT%H:%M:%SZ")
+    old = (now - timedelta(days=200)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    r = client.post("/api/v1/telemetry/page-loads", json={"events": [
+        *[map_event(True) for _ in range(5)],
+        map_event(False, "invalid_coordinates"),
+        map_event(False, "invalid_coordinates"),
+        map_event(False, "load_failed"),
+        map_event(False, "tiles_failed"),                 # problema, pero no es una carga nueva
+        map_event(False, "location_fallback", last_month),
+        map_event(True, occurred_at=last_month),
+        map_event(False, "load_failed", old),             # fuera de la ventana de 3 meses
+        event(500, spot="nitro-coffee"),                  # otras pantallas no cuentan
+    ]})
+    assert r.status_code == 202, r.text
+
+    r = client.get("/api/v1/analytics/map-display-issues").json()
+    assert r["question"].startswith("How many times does the app display the restaurant's location incorrectly")
+    assert (r["months"], r["tzOffsetMinutes"], r["maxIssuePercentage"]) == (3, -300, 10.0)
+    # Cargas: 5 + 2 + 1 este mes y 2 el mes pasado = 10. Problemas: 2 + 1 + 1 (tiles) + 1 = 5.
+    assert (r["mapLoads"], r["issues"], r["issuePercentage"]) == (10, 5, 50.0)
+    assert r["issuesByType"] == {"invalid_coordinates": 2, "load_failed": 1, "location_fallback": 1, "tiles_failed": 1}
+    assert list(r["issuesByType"]) == ["invalid_coordinates", "load_failed", "location_fallback", "tiles_failed"]
+    assert (r["mainIssue"], r["recommendation"]) == ("invalid_coordinates", "improve")
+
+    assert len(r["byMonth"]) == 3 and r["byMonth"][-1]["month"] == month(now)
+    by_month = {m["month"]: m for m in r["byMonth"]}
+    current, previous = by_month[month(now)], by_month[month(before)]
+    assert (current["mapLoads"], current["issues"], current["issuePercentage"]) == (8, 4, 50.0)
+    assert current["issuesByType"]["tiles_failed"] == 1 and current["mainIssue"] == "invalid_coordinates"
+    assert (previous["mapLoads"], previous["issues"], previous["issuePercentage"], previous["mainIssue"]) == \
+        (2, 1, 50.0, "location_fallback")
+    empty_month = next(m for m in r["byMonth"] if m["month"] not in (month(now), month(before)))
+    assert empty_month == {"mapLoads": 0, "issues": 0, "issuePercentage": 0.0, "issuesByType": {},
+                           "mainIssue": None, "month": empty_month["month"]}
+
+    assert client.get("/api/v1/analytics/map-display-issues",
+                      params={"maxIssuePercentage": 50}).json()["recommendation"] == "keep"  # 50 no es "mas de 50"
+
+
+def test_map_display_issues_keep_and_rounding(client):
+    events = [map_event(True) for _ in range(29)] + [map_event(False, "load_failed")]
+    client.post("/api/v1/telemetry/page-loads", json={"events": events})
+    r = client.get("/api/v1/analytics/map-display-issues", params={"months": 1}).json()
+    assert (r["mapLoads"], r["issues"], r["issuePercentage"]) == (30, 1, 3.3)
+    assert (r["mainIssue"], r["recommendation"]) == ("load_failed", "keep")
+
+    empty = client.get("/api/v1/analytics/map-display-issues", params={"months": 1, "tzOffsetMinutes": 840})
+    assert empty.status_code == 200
+
+
+def test_map_display_issues_validation(client):
+    url = "/api/v1/analytics/map-display-issues"
+    for params in ({"months": 0}, {"months": 37}, {"tzOffsetMinutes": 841}, {"maxIssuePercentage": -1},
+                   {"maxIssuePercentage": 101}, {"months": "tres"}):
+        assert client.get(url, params=params).status_code == 422, params
+
+
+def test_dashboard_page(client):
+    r = client.get("/dashboard")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+    for endpoint in ("slow-page-loads", "failed-requests", "monthly-active-favoriters", "rating-usage",
+                     "searches-by-weekday", "map-display-issues"):
+        assert f"/api/v1/analytics/{endpoint}" in r.text
+    assert "cdnjs.cloudflare.com" in r.text

@@ -12,6 +12,7 @@ Sirve el catálogo de restaurantes y recibe la telemetría con la que se respond
 | BQ5 | Which restaurants in the user's favorites are open now and within a 15-minute walk? | `GET /api/v1/users/{userId}/favorites/nearby?lat=&lng=&maxWalkMinutes=15` |
 | BQ7 | How many active users add one or more restaurants to their favorites each month? | `GET /api/v1/analytics/monthly-active-favoriters` |
 | BQ10 | What percentage of users use the restaurant rating feature when looking at a restaurant's page? | `GET /api/v1/analytics/rating-usage?months=6` |
+| BQ14 | How many times does the app display the restaurant's location incorrectly on the map or not at all, and should the map feature be improved or changed based on this? | `GET /api/v1/analytics/map-display-issues?months=3&maxIssuePercentage=10` |
 
 > **Nota de numeración:** hay dos preguntas marcadas BQ3, la de vistas por hora (telemetría) y la de
 > recomendaciones cercanas (feature de la *Taste Map*). Falta confirmar con el equipo cuál conserva el número.
@@ -37,6 +38,14 @@ corta y que el usuario **todavía no ha probado**. Acepta `maxWalkMinutes` (por 
 BQ7 acepta `months` (meses calendario hacia atrás incluido el actual, por defecto 12, máx. 36), `tzOffsetMinutes` y
 `platform`. Cuenta el `userId` de cada evento: el del token si la petición está autenticada; los ids de desarrollo
 (sin token) también cuentan, así que para la medición real hay que usar la app con sesión iniciada.
+
+BQ14 es de **tipo \*** (decisión de producto): mide cuántas veces el mapa (*Taste Map* del front Flutter) no muestra
+la ubicación de los restaurantes o la muestra mal, y recomienda mejorar o mantener el mapa. Acepta `months` (meses
+calendario hacia atrás incluido el actual, por defecto 3, máx. 36), `tzOffsetMinutes` y `maxIssuePercentage`
+(por defecto 10, de 0 a 100): si el porcentaje de problemas de toda la ventana lo supera, `recommendation` es
+`improve`; si no, `keep`. Todos los datos para la BQ14 salen de la tabla `page_load_events`; no hay tabla nueva.
+
+Todas las BQ del equipo se ven juntas en el **[Dashboard](#dashboard)** (`GET /dashboard`).
 
 ## Correr
 
@@ -77,6 +86,8 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | GET | `/api/v1/analytics/spot-views-by-hour` | BQ3 (vistas + búsquedas por restaurante en cada hora) |
 | GET | `/api/v1/analytics/monthly-active-favoriters` | BQ7 (usuarios distintos que agregan favoritos, por mes) |
 | GET | `/api/v1/analytics/rating-usage` | BQ10 (de los usuarios que vieron páginas de restaurantes en el mes, % que calificó) |
+| GET | `/api/v1/analytics/map-display-issues` | BQ14 (cargas del mapa con problemas, por tipo y por mes, y si conviene mejorar el mapa) |
+| GET | `/dashboard` | Dashboard del equipo con todas las BQ (HTML) |
 | GET | `/api/v1/users/{userId}/favorites` | Restaurantes guardados por el usuario (mismo formato que `/spots`) |
 | PUT | `/api/v1/users/{userId}/favorites/{spotId}` | Guardar restaurante (idempotente, `204`; `404` si el restaurante no existe) |
 | DELETE | `/api/v1/users/{userId}/favorites/{spotId}` | Quitar de guardados (idempotente, `204`) |
@@ -155,6 +166,17 @@ Contrato del evento de telemetría (cualquier front debe enviarlo igual):
 - BQ7: *usuario activo que agrega favoritos* = `userId` distinto con al menos un evento `screen=favorite_added` en el
   mes calendario local (`occurredAt` desplazado con `tzOffsetMinutes`): `COUNT(DISTINCT userId)` por mes. Se reporta
   también el total de eventos del mes. Los meses sin actividad salen en `0`. BQ1/BQ2/BQ3 ignoran estos eventos.
+- BQ14: la app manda eventos `screen=map_display` (sin `spotId`). *Carga del mapa* = un evento `map_display` cuyo
+  `errorType` es nulo o distinto de `tiles_failed`: la app manda **uno por carga**, con `success=true` si todo salió
+  bien o `success=false` y `errorType` = `load_failed` (no llegaron los restaurantes), `location_fallback` (sin
+  ubicación del usuario: el mapa se centra en el campus) o `invalid_coordinates` (algún restaurante con coordenadas
+  fuera de rango, en 0,0 o a más de 5 km; ese pin no se dibuja). Además, como máximo un evento extra por carga con
+  `success=false` y `errorType=tiles_failed` cuando fallan las imágenes del mapa. *Problema* = cualquier evento
+  `map_display` con `success=false` (incluido `tiles_failed`, que es problema pero **no** cuenta como carga).
+  `issuePercentage` = problemas / cargas × 100 con 1 decimal (como `tiles_failed` no es carga, en teoría puede pasar
+  de 100). `issuesByType` va de mayor a menor y `mainIssue` es el tipo con más problemas (`null` si no hubo). Se
+  agrupa por mes calendario local, igual que la BQ7; los meses sin cargas salen en `0`. Las cargas que la app sirve
+  desde su caché en memoria (LRU) no mandan evento. BQ1/BQ2/BQ3 ignoran estos eventos.
 
 Evento de búsqueda (mismo endpoint y contrato):
 
@@ -179,6 +201,21 @@ Ejemplo de respuesta de BQ7 (`?months=2`):
   "months": 2, "tzOffsetMinutes": -300,
   "byMonth": [ { "month": "2026-09", "activeFavoriters": 14, "favoriteEvents": 31 },
                { "month": "2026-10", "activeFavoriters": 3, "favoriteEvents": 5 } ] }
+```
+
+Ejemplo de respuesta de BQ14 (`?months=2`):
+
+```json
+{ "mapLoads": 40, "issues": 6, "issuePercentage": 15.0,
+  "issuesByType": { "invalid_coordinates": 3, "tiles_failed": 2, "location_fallback": 1 },
+  "mainIssue": "invalid_coordinates",
+  "question": "How many times does the app display the restaurant's location incorrectly on the map or not at all, and should the map feature be improved or changed based on this?",
+  "months": 2, "tzOffsetMinutes": -300, "maxIssuePercentage": 10.0, "recommendation": "improve",
+  "byMonth": [
+    { "mapLoads": 15, "issues": 1, "issuePercentage": 6.7, "issuesByType": { "location_fallback": 1 },
+      "mainIssue": "location_fallback", "month": "2026-09" },
+    { "mapLoads": 25, "issues": 5, "issuePercentage": 20.0,
+      "issuesByType": { "invalid_coordinates": 3, "tiles_failed": 2 }, "mainIssue": "invalid_coordinates", "month": "2026-10" } ] }
 ```
 
 Ejemplo de respuesta de BQ5 (`GET /api/v1/users/ana/favorites/nearby?lat=4.6019&lng=-74.0658&maxWalkMinutes=15`;
@@ -213,6 +250,21 @@ Ejemplo de respuesta de BQ3 (`?hour=12&limit=2`; sin `hour` devuelve una entrada
                           { "rank": 2, "spotId": "conda-de-bons", "name": "Conda de Bons", "emoji": "🍔",
                             "pageViews": 12, "searches": 5, "total": 17 } ] } ] }
 ```
+
+## Dashboard
+
+Una sola página con **todas** las business questions del equipo, leída de la misma base SQLite a través de los
+endpoints `/api/v1/analytics/...` (no consulta la base directamente). Con el backend corriendo, abrir
+**http://localhost:8000/dashboard** en el navegador.
+
+- Una tarjeta por BQ: BQ1 y BQ2 (Tomas Diaz), BQ7 (Camilo Linares), BQ10 (Gabriela Perdomo), BQ11 (Lucas Galindo),
+  BQ12 (Alejandro Vides) y BQ14 (Esteban Alvarado), con la pregunta, el número clave y un gráfico simple. La BQ14
+  muestra los problemas por tipo, el % de cada mes y la recomendación (`IMPROVE` / `KEEP`) en grande.
+- Botón **Refresh** y actualización automática cada 30 s. Si un endpoint falla, solo su tarjeta muestra el error.
+- La BQ11 todavía no tiene endpoint: su tarjeta dice "Endpoint not available yet". Cuando exista, basta con poner su
+  ruta y su `render` en la lista `CARDS` de `app/static/dashboard.html`.
+- Es un solo archivo HTML + CSS + JavaScript (Chart.js desde cdnjs), sin build ni framework. Los datos sintéticos
+  de `python scripts/simulate_telemetry.py` llenan BQ1, BQ2 y BQ12; las demás tarjetas se llenan usando la app.
 
 ## a. Architecture – estructura general y componentes
 

@@ -348,3 +348,26 @@ class LastWaitTimesReport(ApiModel):
     question: str
     fresh_minutes: int
     spots: list[LastWaitTime]  # todos los restaurantes, en el orden del catalogo
+
+
+# ---------- BQ14: problemas al mostrar el mapa de restaurantes ----------
+
+class MapDisplayStats(ApiModel):
+    map_loads: int                  # eventos map_display que no son tiles_failed (uno por carga del mapa)
+    issues: int                     # eventos map_display con success = false, incluido tiles_failed
+    issue_percentage: float         # issues / map_loads * 100, 1 decimal
+    issues_by_type: dict[str, int]  # error_type -> problemas, de mayor a menor
+    main_issue: str | None          # el error_type con mas problemas (None si no hubo)
+
+
+class MonthlyMapDisplay(MapDisplayStats):
+    month: str                      # 'YYYY-MM' en hora local del campus
+
+
+class MapDisplayIssuesReport(MapDisplayStats):
+    question: str
+    months: int
+    tz_offset_minutes: int
+    max_issue_percentage: float
+    recommendation: Literal["improve", "keep"]  # improve si issue_percentage (de toda la ventana) > max_issue_percentage
+    by_month: list[MonthlyMapDisplay]  # un elemento por mes de la ventana, del mas antiguo al actual (0 si no hubo)
