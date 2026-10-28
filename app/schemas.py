@@ -306,3 +306,35 @@ class SearchesByWeekdayReport(ApiModel):
     tz_offset_minutes: int
     total_searches: int
     by_day: list[WeekdaySearchCount]  # siempre de lunes a domingo
+
+# ---------- BQ4: ultimo tiempo de espera reportado por restaurante ----------
+
+class WaitTimeReportIn(ApiModel):
+    report_id: str = Field(min_length=1, max_length=64)   # uuid del cliente: reenviar el mismo reporte no lo duplica
+    minutes: int = Field(ge=0, le=180)
+    platform: str = Field(min_length=1, max_length=32)
+    reported_at: datetime | None = None                    # si el reporte se guardo offline, la hora real del reporte
+
+
+class WaitTimeReportOut(ApiModel):
+    spot_id: str
+    minutes: int
+    reported_at: datetime
+    duplicate: bool            # True si ese report_id ya habia llegado antes (reintento)
+
+
+class LastWaitTime(ApiModel):
+    spot_id: str
+    name: str
+    emoji: str
+    minutes: int | None        # None si nadie ha reportado todavia
+    reported_at: datetime | None
+    minutes_ago: int | None
+    is_recent: bool            # reportado dentro de la ventana freshMinutes; si no, la app lo muestra como viejo
+    recent_reports: int        # cuantos reportes hubo en esa ventana (da confianza al dato)
+
+
+class LastWaitTimesReport(ApiModel):
+    question: str
+    fresh_minutes: int
+    spots: list[LastWaitTime]  # todos los restaurantes, en el orden del catalogo

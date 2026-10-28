@@ -118,6 +118,21 @@ CREATE TABLE IF NOT EXISTS page_load_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ple_screen_time ON page_load_events(screen, occurred_at);
+
+-- BQ4: tiempos de espera que reportan los estudiantes desde la pagina del restaurante.
+-- report_id lo genera el cliente: un reporte que se guardo sin conexion y se reenvia no se duplica.
+CREATE TABLE IF NOT EXISTS wait_time_reports (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_id   TEXT NOT NULL UNIQUE,
+    spot_id     TEXT NOT NULL REFERENCES spots(id),
+    minutes     INTEGER NOT NULL,
+    user_id     TEXT,
+    platform    TEXT NOT NULL,
+    reported_at TEXT NOT NULL,              -- cuando el estudiante lo reporto (puede llegar despues, si estaba offline)
+    received_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_wtr_spot_time ON wait_time_reports(spot_id, reported_at);
 """
 
 # Columnas agregadas despues de la primera version del esquema. CREATE TABLE IF NOT EXISTS no altera
