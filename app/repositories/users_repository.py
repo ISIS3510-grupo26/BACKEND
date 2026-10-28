@@ -19,7 +19,9 @@ class UsersRepository:
         return {"id": user_id, "email": email, "token_version": 0}
 
     def get_by_email(self, email: str) -> dict | None:
-        row = self.conn.execute("SELECT id, email, password_hash FROM users WHERE email = ?", (email,)).fetchone()
+        # token_version va en el token: sin ella un login despues de cambiar la contraseña daria un token invalido.
+        row = self.conn.execute("SELECT id, email, password_hash, token_version FROM users WHERE email = ?",
+                                (email,)).fetchone()
         return dict(row) if row else None
 
     def get_credentials(self, user_id: str) -> dict | None:
@@ -32,6 +34,11 @@ class UsersRepository:
             self.conn.execute("UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?",
                               (password_hash, user_id))
         return self.token_version(user_id)
+
+    def replace_password_hash(self, user_id: str, password_hash: str) -> None:
+        """Cambia solo el hash (migracion de esquema): la contraseña es la misma, los tokens siguen validos."""
+        with self.conn:
+            self.conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
 
     def token_version(self, user_id: str) -> int | None:
         row = self.conn.execute("SELECT token_version FROM users WHERE id = ?", (user_id,)).fetchone()
