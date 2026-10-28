@@ -98,7 +98,7 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 ### Autenticación
 
 Email + contraseña → JWT (HS256) de **7 días**, sin refresh token: al vencer, cualquier endpoint responde `401` y el
-cliente vuelve a `/auth/login`. Las contraseñas se guardan con **bcrypt**.
+cliente vuelve a `/auth/login`. Las contraseñas se guardan con **bcrypt** (ver *Contraseñas* abajo).
 
 ```
 POST /api/v1/auth/signup   {"email": "ana@uniandes.edu.co", "password": "segura123"}   → 201
@@ -109,7 +109,13 @@ POST /api/v1/auth/login    {"email": "ana@uniandes.edu.co", "password": "segura1
 GET /api/v1/auth/me        Authorization: Bearer <accessToken>                          → 200 {"userId", "email"}
 ```
 
-- `email` se normaliza (sin espacios, minúsculas). `password` en el registro: 8–72 bytes (límite de bcrypt).
+- `email` se normaliza (sin espacios, minúsculas). `password` en el registro y `newPassword` al cambiarla:
+  **8 a 128 caracteres** (ver *Contraseñas*). En el login solo se exige 1 a 128.
+- **Contraseñas**: se normalizan con **NFKC**, así "ñ" escrita como un carácter o como "n" + tilde es la misma
+  contraseña. El largo se cuenta en caracteres (*code points*) después de normalizar: un emoji cuenta 1, no sus 4
+  bytes. Se guarda `"v2$" + bcrypt(base64(sha256(contraseña normalizada)))`: el pre-hash siempre mide 44 bytes, así
+  bcrypt nunca trunca y ya no existe el límite de 72 bytes. Los hashes anteriores (bcrypt directo, sin prefijo) siguen
+  funcionando y se migran solos al esquema `v2$` en el siguiente login correcto, sin cerrar sesiones.
 - Errores: `409` email ya registrado · `401` email o contraseña incorrectos (mismo mensaje en ambos casos) ·
   `422` datos inválidos. Todo `401` trae `WWW-Authenticate: Bearer`.
 - En las demás peticiones: header `Authorization: Bearer <accessToken>`. El `userId` de la respuesta es el que va en

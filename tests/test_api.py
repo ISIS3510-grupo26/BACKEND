@@ -358,7 +358,7 @@ def test_signup_and_login(client):
     assert dup.status_code == 409
     assert client.post("/api/v1/auth/signup", json={"email": "no-es-email", "password": "segura123"}).status_code == 422
     assert client.post("/api/v1/auth/signup", json={"email": "b@x.co", "password": "corta"}).status_code == 422
-    assert client.post("/api/v1/auth/signup", json={"email": "b@x.co", "password": "ñ" * 37}).status_code == 422  # 74 bytes
+    assert client.post("/api/v1/auth/signup", json={"email": "b@x.co", "password": "ñ" * 129}).status_code == 422  # 129 caracteres
 
     ok = client.post("/api/v1/auth/login", json={"email": "ana@uniandes.edu.co", "password": "segura123"})
     assert ok.status_code == 200 and ok.json()["userId"] == s["userId"]
@@ -379,7 +379,7 @@ def test_password_is_hashed(client):
     conn = sqlite3.connect(settings.db_path)
     stored = conn.execute("SELECT password_hash FROM users").fetchone()[0]
     conn.close()
-    assert stored.startswith("$2") and "segura123" not in stored
+    assert stored.startswith("v2$$2") and "segura123" not in stored  # esquema v2: prefijo + bcrypt
 
 
 def test_token_validation(client):
