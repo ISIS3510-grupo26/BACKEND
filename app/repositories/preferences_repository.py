@@ -1,4 +1,4 @@
-#Repository de preferencias: gustos y restricciones que el usuario guarda desde la app.
+# Repository de preferencias, gustos y restricciones que el usuario guarda desde la app.
 import json
 import sqlite3
 
@@ -26,7 +26,7 @@ class PreferencesRepository:
         return _row_to_prefs(row) if row else None
 
     def save(self, user_id: str, prefs: PreferencesIn) -> None:
-        #Crea o reemplaza las preferencias del usuario.
+        # Crea o reemplaza las preferencias del usuario.
         values = prefs.model_dump()
         for field in _LIST_FIELDS:
             values[field] = json.dumps(values[field])
@@ -42,8 +42,7 @@ class PreferencesRepository:
             )
 
     def all_preferences(self) -> dict[str, dict]:
-        
-        #Las de todos los usuarios, para encontrar estudiantes con gustos parecidos (filtrado colaborativo).
+        # Filtrado colaborativo).
         rows = self.conn.execute(
             "SELECT user_id, main_cuisine, meal_style, flavors, interests, diet, avoid, allergies FROM user_preferences"
         ).fetchall()
