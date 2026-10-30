@@ -102,6 +102,8 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | DELETE | `/api/v1/users/{userId}/favorites/{spotId}` | Quitar de guardados (idempotente, `204`) |
 | GET | `/api/v1/users/{userId}/favorites/nearby` | BQ5 (favoritos abiertos ahora y a ≤ `maxWalkMinutes` caminando) |
 | GET | `/api/v1/users/{userId}/recommendations/nearby` | BQ3 (mejor calificados a ≤ `maxWalkMinutes` caminando que el usuario no ha probado) |
+| GET / PUT | `/api/v1/users/{userId}/preferences` | Taste Profile y Dietary Preferences del usuario (PUT reemplaza todo). Sin guardar devuelve los valores por defecto con `saved=false` |
+| GET | `/api/v1/users/{userId}/matches` | Smart feature de Flutter: compatibilidad 0–100 de cada restaurante para el usuario (su perfil + estudiantes con gustos parecidos) y si choca con su dieta |
 | GET | `/api/v1/recommendations/best-for-you` | BQ6 (menos espera según la BQ4 + compatibilidad con el perfil de gusto; el perfil es opcional) |
 | GET | `/health` | Health check |
 
