@@ -15,6 +15,8 @@ _SPOT_COLUMNS = (
 _GEO_COLUMNS = ("latitude", "longitude")
 # Lo que se lee para responder /spots, /spots/{id} y los favoritos.
 _PUBLIC_COLUMNS = (*_SPOT_COLUMNS, *_GEO_COLUMNS)
+# Se escriben al sembrar pero no se exponen en /spots.
+_MATCH_COLUMNS = ("cuisines", "flavors", "meal_styles", "contains")  # listas, se guardan como JSON
 _BOOL_COLUMNS = {"is_budget", "is_vegetarian", "is_high_protein", "is_student_pick"}
 # Las cambian las resenas de los usuarios
 _RATING_COLUMNS = ("rating", "total_reviews")
@@ -113,7 +115,7 @@ class SpotsRepository:
         reemplazan completos.Excepción: las reseñas de usuarios (user_id no nulo) y el rating/total_reviews
         que ellas cambiaron no se tocan, si no cada reinicio del servidor borraria lo que publicaron."""
         spots = json.loads(SEED_FILE.read_text(encoding="utf-8"))
-        columns = _PUBLIC_COLUMNS
+        columns = (*_PUBLIC_COLUMNS, *_MATCH_COLUMNS)
         upsert = (
             f"INSERT INTO spots ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))}) "
             f"ON CONFLICT(id) DO UPDATE SET "
@@ -121,7 +123,8 @@ class SpotsRepository:
         )
         with self.conn:
             for spot in spots:
-                self.conn.execute(upsert, [spot.get(c) for c in columns])
+                self.conn.execute(upsert, [json.dumps(spot.get(c, [])) if c in _MATCH_COLUMNS else spot.get(c)
+                                           for c in columns])
                 for table in ("menu_items", "spot_opening_hours"):
                     self.conn.execute(f"DELETE FROM {table} WHERE spot_id = ?", (spot["id"],))
                 self.conn.execute("DELETE FROM reviews WHERE spot_id = ? AND user_id IS NULL", (spot["id"],))

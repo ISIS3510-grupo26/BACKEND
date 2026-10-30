@@ -86,6 +86,20 @@ CREATE TABLE IF NOT EXISTS spot_opening_hours (
 
 CREATE INDEX IF NOT EXISTS idx_soh_spot ON spot_opening_hours(spot_id);
 
+-- Gustos y restricciones de cada usuario (pantallas Taste Profile y Dietary Preferences de Flutter).
+-- Las listas se guardan como JSON. Con esto se calcula la compatibilidad de cada restaurante (smart feature).
+CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id      TEXT PRIMARY KEY,
+    main_cuisine TEXT,
+    meal_style   TEXT,
+    flavors      TEXT NOT NULL DEFAULT '[]',
+    interests    TEXT NOT NULL DEFAULT '[]',
+    diet         TEXT NOT NULL DEFAULT 'No specific diet',
+    avoid        TEXT NOT NULL DEFAULT '[]',
+    allergies    TEXT NOT NULL DEFAULT '[]',
+    updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
 -- Restaurantes guardados por cada usuario. user_id es el identificador que manda el cliente
 -- (todavia no hay autenticacion; cuando exista sera el id del usuario autenticado).
 CREATE TABLE IF NOT EXISTS favorites (
@@ -138,7 +152,8 @@ CREATE INDEX IF NOT EXISTS idx_wtr_spot_time ON wait_time_reports(spot_id, repor
 # Columnas agregadas despues de la primera version del esquema. CREATE TABLE IF NOT EXISTS no altera
 # tablas que ya existen, asi que las bases creadas antes se actualizan aqui (idempotente).
 ADDED_COLUMNS = {
-    "spots": [("latitude", "REAL"), ("longitude", "REAL")],
+        "spots": [("latitude", "REAL"), ("longitude", "REAL"), ("cuisines", "TEXT"), ("flavors", "TEXT"),
+                  ("meal_styles", "TEXT"), ("contains", "TEXT")],
     "page_load_events": [("user_id", "TEXT")],
     "reviews": [("user_id", "TEXT"), ("created_at", "TEXT")],
     "users": [("token_version", "INTEGER NOT NULL DEFAULT 0")],

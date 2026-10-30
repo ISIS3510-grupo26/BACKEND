@@ -77,6 +77,22 @@
         "dined_ago": "Dined last week",
         "helpful_count": 6
       }
+    ],
+    "cuisines": [
+      "American",
+      "Fast food"
+    ],
+    "flavors": [
+      "Savory"
+    ],
+    "meal_styles": [
+      "Comfort food",
+      "Quick & casual"
+    ],
+    "contains": [
+      "meat",
+      "dairy",
+      "gluten"
     ]
   },
   {
@@ -163,7 +179,21 @@
         "dined_ago": "Dined 5 days ago",
         "helpful_count": 3
       }
-    ]
+    ],
+    "cuisines": [
+      "Asian",
+      "Mediterranean"
+    ],
+    "flavors": [
+      "Savory",
+      "Mild",
+      "Sour"
+    ],
+    "meal_styles": [
+      "Healthy options",
+      "Quick & casual"
+    ],
+    "contains": []
   },
   {
     "id": "nitro-coffee",
@@ -241,6 +271,20 @@
         "dined_ago": "Dined today",
         "helpful_count": 17
       }
+    ],
+    "cuisines": [
+      "Bakery & desserts"
+    ],
+    "flavors": [
+      "Sweet",
+      "Mild"
+    ],
+    "meal_styles": [
+      "Quick & casual"
+    ],
+    "contains": [
+      "dairy",
+      "gluten"
     ]
   },
   {
@@ -313,6 +357,22 @@
         "dined_ago": "Dined 2 days ago",
         "helpful_count": 7
       }
+    ],
+    "cuisines": [
+      "Mexican"
+    ],
+    "flavors": [
+      "Spicy",
+      "Savory",
+      "Sour"
+    ],
+    "meal_styles": [
+      "Quick & casual",
+      "Trying something new"
+    ],
+    "contains": [
+      "meat",
+      "gluten"
     ]
   },
   {
@@ -409,6 +469,22 @@
         "dined_ago": "Dined 4 days ago",
         "helpful_count": 2
       }
+    ],
+    "cuisines": [
+      "American",
+      "Fast food"
+    ],
+    "flavors": [
+      "Savory"
+    ],
+    "meal_styles": [
+      "Comfort food",
+      "Trying something new"
+    ],
+    "contains": [
+      "meat",
+      "dairy",
+      "gluten"
     ]
   },
   {
@@ -480,6 +556,22 @@
         "dined_ago": "Dined yesterday",
         "helpful_count": 5
       }
+    ],
+    "cuisines": [
+      "Italian",
+      "Fast food"
+    ],
+    "flavors": [
+      "Savory",
+      "Mild"
+    ],
+    "meal_styles": [
+      "Quick & casual",
+      "Comfort food"
+    ],
+    "contains": [
+      "dairy",
+      "gluten"
     ]
   },
   {
@@ -551,6 +643,22 @@
         "dined_ago": "Dined 3 days ago",
         "helpful_count": 4
       }
+    ],
+    "cuisines": [
+      "Colombian",
+      "Fast food"
+    ],
+    "flavors": [
+      "Savory",
+      "Spicy"
+    ],
+    "meal_styles": [
+      "Comfort food",
+      "Quick & casual"
+    ],
+    "contains": [
+      "meat",
+      "gluten"
     ]
   }
 ]

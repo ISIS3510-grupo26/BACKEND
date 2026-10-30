@@ -152,6 +152,37 @@ class ReviewCreatedOut(ApiModel):
         return round(v, 1)
     
 
+# ---------- Preferencias del usuario (Taste Profile y Dietary Preferences) ----------
+
+class PreferencesIn(ApiModel):
+    main_cuisine: str | None = Field(default=None, max_length=64)
+    meal_style: str | None = Field(default=None, max_length=64)
+    flavors: list[str] = Field(default_factory=list, max_length=20)
+    interests: list[str] = Field(default_factory=list, max_length=20)
+    diet: str = Field(default="No specific diet", max_length=64)
+    avoid: list[str] = Field(default_factory=list, max_length=20)
+    allergies: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("flavors", "interests", "avoid", "allergies")
+    @classmethod
+    def short_unique_items(cls, v: list[str]) -> list[str]:
+        if any(len(item) > 64 for item in v):
+            raise ValueError("each option must be at most 64 characters")
+        return list(dict.fromkeys(v))  # sin repetidos, conservando el orden
+
+
+class PreferencesOut(PreferencesIn):
+    saved: bool  # False = el usuario todavia no ha guardado nada; son los valores por defecto
+
+
+# ---------- Smart feature G: compatibilidad de cada restaurante para el usuario ----------
+
+class SpotMatchOut(ApiModel):
+    spot_id: str
+    compatibility: int                   # 0-100, calculado para este usuario
+    dietary_conflict: str | None = None  # p. ej. "No vegetarian options": no se le recomienda
+    
+    
 # ---------- Favoritos (BQ5) ----------
 
 class NearbyFavoriteOut(ApiModel):
