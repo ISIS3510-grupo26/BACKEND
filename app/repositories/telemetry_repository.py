@@ -9,6 +9,8 @@ SEARCH_SCREEN = "search"  # el usuario eligio un restaurante desde el buscador
 FAVORITE_SCREEN = "favorite_added"  # el usuario guardo un restaurante (BQ7)
 MAP_SCREEN = "map_display"  # BQ14: una carga del mapa (Taste Map) o una falla de sus imagenes
 TILES_FAILED = "tiles_failed"  # el unico error_type de map_display que no es una carga nueva
+REVIEW_SCREEN = "review_submit"  # BQ13: un intento de publicar una reseña (eventId = id del intento)
+CRASH = "crash"  # BQ13: la app se cerro mientras enviaba la reseña
 
 # Columnas por las que se permite agrupar (lista blanca: nunca se interpola input del usuario).
 GROUP_EXPRESSIONS = {
@@ -197,4 +199,35 @@ class TelemetryRepository:
             f"FROM page_load_events WHERE {' AND '.join(clauses)} "
             "GROUP BY day_of_week ORDER BY day_of_week",
             params,
+        ).fetchall()
+        
+        
+    def review_submits_by_month(self, tz_offset_minutes: int, first_month: str, last_month: str) -> list[sqlite3.Row]:
+        """BQ13: por mes local, resultado y error_type, intentos de publicar una reseña.
+
+        saved_after cuenta los crashes cuya reseña si quedo en la tabla reviews: mismo usuario y restaurante,
+        guardada despues de que empezo el intento (con 5 minutos de margen por si el reloj del celular va adelantado).
+        """
+        local_month = "strftime('%Y-%m', occurred_at, ? || ' minutes')"
+        return self.conn.execute(
+            f"WITH attempts AS (SELECT {local_month} AS month, success, COALESCE(error_type, 'unknown') AS error_type, "
+            "                          user_id, spot_id, occurred_at "
+            f"                  FROM page_load_events WHERE screen = ? AND {local_month} BETWEEN ? AND ?) "
+            "SELECT month, success, error_type, COUNT(*) AS attempts, "
+            "       SUM(CASE WHEN error_type = ? AND EXISTS ("
+            "           SELECT 1 FROM reviews r WHERE r.user_id = a.user_id AND r.spot_id = a.spot_id "
+            "           AND r.created_at >= strftime('%Y-%m-%dT%H:%M:%S', a.occurred_at, '-5 minutes')"
+            "       ) THEN 1 ELSE 0 END) AS saved_after "
+            "FROM attempts a GROUP BY month, success, error_type ORDER BY month",
+            [str(tz_offset_minutes), REVIEW_SCREEN, str(tz_offset_minutes), first_month, last_month, CRASH],
+        ).fetchall()
+
+    def user_reviews_by_month(self, tz_offset_minutes: int, first_month: str, last_month: str) -> list[sqlite3.Row]:
+        """BQ13: reseñas que escribieron los usuarios (no las del catalogo), por mes local."""
+        local_month = "strftime('%Y-%m', created_at, ? || ' minutes')"
+        return self.conn.execute(
+            f"SELECT {local_month} AS month, COUNT(*) AS reviews FROM reviews "
+            f"WHERE user_id IS NOT NULL AND created_at IS NOT NULL AND {local_month} BETWEEN ? AND ? "
+            "GROUP BY month",
+            [str(tz_offset_minutes), str(tz_offset_minutes), first_month, last_month],
         ).fetchall()

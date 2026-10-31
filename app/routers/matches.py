@@ -31,7 +31,7 @@ def get_preferences(user_id: AuthorizedUserId, repo: PreferencesRepository = Dep
 @router.put("/{user_id}/preferences", response_model=PreferencesOut)
 def save_preferences(body: PreferencesIn, user_id: AuthorizedUserId,
                      repo: PreferencesRepository = Depends(get_preferences_repo)):
-    # Reemplaza todas las preferencias. Taste Profile y Dietary Preferences mandan el objeto completo.
+    #Reemplaza todas las preferencias. (antes no se llamaba a save y no quedaban guardadas)
     repo.save(user_id, body)
     return PreferencesOut(**body.model_dump(), saved=True)
 

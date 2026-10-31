@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from app.config import settings
 from app.db import get_conn
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import (FailedRequestsReport, MapDisplayIssuesReport, MonthlyActiveFavoritersReport, RatingUsageReport, SlowLoadsReport, SpotViewsByHourReport, SearchesByWeekdayReport)
+from app.schemas import (FailedRequestsReport, MapDisplayIssuesReport, MonthlyActiveFavoritersReport, RatingUsageReport, ReviewCrashesReport, SlowLoadsReport, SpotViewsByHourReport, SearchesByWeekdayReport)
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
@@ -98,3 +98,17 @@ def map_display_issues(
     """BQ14 (tipo *): cargas del mapa con la ubicacion mal o sin mostrar, por mes, y si conviene mejorar el mapa."""
     return service.map_display_issues(months=months, tz_offset_minutes=tz_offset_minutes,
                                       max_issue_percentage=max_issue_percentage)
+
+
+@router.get("/review-crashes", response_model=ReviewCrashesReport)
+def review_crashes(
+    months: int = Query(3, ge=1, le=36, description="Meses calendario hacia atras, incluido el actual"),
+    tz_offset_minutes: int = Query(settings.campus_tz_offset_minutes, alias="tzOffsetMinutes", ge=-840, le=840),
+    max_crash_percentage: float = Query(5, alias="maxCrashPercentage", ge=0, le=100,
+                                        description="Por encima de este % de crashes se recomienda arreglarlos primero"),
+    service: AnalyticsService = Depends(get_service),
+):
+    """BQ13: crashes al publicar reseñas, cuantas reseñas se perdieron por eso y que cambiar primero."""
+    return service.review_crashes(months=months, tz_offset_minutes=tz_offset_minutes,
+                                  max_crash_percentage=max_crash_percentage)
+    
