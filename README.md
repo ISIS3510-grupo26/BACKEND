@@ -13,6 +13,7 @@ Sirve el catálogo de restaurantes y recibe la telemetría con la que se respond
 | BQ6 | Which restaurants have the shortest waiting time and the best match with my taste profile? | `GET /api/v1/recommendations/best-for-you?freshMinutes=120` |
 | BQ7 | How many active users add one or more restaurants to their favorites each month? | `GET /api/v1/analytics/monthly-active-favoriters` |
 | BQ10 | What percentage of users use the restaurant rating feature when looking at a restaurant's page? | `GET /api/v1/analytics/rating-usage?months=6` |
+| BQ13 | How does the number of app crashes during the restaurant review submission affect the number of reviews successfully published and what changes to the review submission feature should be prioritized based on this information? | `GET /api/v1/analytics/review-crashes?months=3&maxCrashPercentage=5` |
 | BQ14 | How many times does the app display the restaurant's location incorrectly on the map or not at all, and should the map feature be improved or changed based on this? | `GET /api/v1/analytics/map-display-issues?months=3&maxIssuePercentage=10` |
 
 > **Nota de numeración:** hay dos preguntas marcadas BQ3, la de vistas por hora (telemetría) y la de

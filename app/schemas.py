@@ -438,3 +438,40 @@ class MapDisplayIssuesReport(MapDisplayStats):
     max_issue_percentage: float
     recommendation: Literal["improve", "keep"]  # improve si issue_percentage (de toda la ventana) > max_issue_percentage
     by_month: list[MonthlyMapDisplay]  # un elemento por mes de la ventana, del mas antiguo al actual (0 si no hubo)
+
+
+
+# ---------- BQ13: crashes al publicar una reseña ----------
+
+class ReviewCrashStats(ApiModel):
+    attempts: int                    # intentos de publicar una reseña (eventos review_submit, uno por intento)
+    published: int                   # intentos que la app vio terminar bien (201)
+    crashes: int                     # la app se cerró mientras enviaba (la app lo reporta al volver a abrirse)
+    crash_percentage: float          # crashes / attempts * 100, 1 decimal
+    saved_despite_crash: int         # crashes cuya reseña si quedó en la tabla reviews (el servidor alcanzó a guardarla)
+    lost_to_crashes: int             # crashes sin reseña guardada: reseñas que el estudiante no pudo publicar
+    failures_by_type: dict[str, int]  # error_type -> intentos fallidos (incluye crash), de mayor a menor
+
+
+class MonthlyReviewCrashes(ReviewCrashStats):
+    month: str                       # 'YYYY-MM' en hora local del campus
+    reviews_published: int           # reseñas de usuarios guardadas en la tabla reviews ese mes (fuente de verdad)
+
+
+class ReviewPriority(ApiModel):
+    issue: str                       # error_type
+    failures: int
+    share_percentage: float          # % de todos los intentos fallidos
+    change: str                      # que cambiar en la feature de reseñas
+
+
+class ReviewCrashesReport(ReviewCrashStats):
+    question: str
+    months: int
+    tz_offset_minutes: int
+    max_crash_percentage: float
+    reviews_published: int           # reseñas guardadas en toda la ventana (tabla reviews)
+    crash_impact_percentage: float   # lost_to_crashes / (reviews_published + lost_to_crashes) * 100
+    recommendation: Literal["fix_crashes", "keep"]  # fix_crashes si crash_percentage > max_crash_percentage
+    priorities: list[ReviewPriority]  # cambios a priorizar, del problema mas frecuente al menos frecuente
+    by_month: list[MonthlyReviewCrashes]  # un elemento por mes de la ventana, del mas antiguo al actual

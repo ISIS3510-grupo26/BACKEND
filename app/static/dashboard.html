@@ -172,6 +172,24 @@
         };
       },
     },
+        {
+      bq: 'BQ13', author: 'Gabriela Perdomo', endpoint: '/api/v1/analytics/review-crashes?months=3&maxCrashPercentage=5',
+      wide: true,
+      render: r => ({
+        recommendation: r.recommendation === 'fix_crashes' ? 'fix crashes' : 'keep',
+        tone: r.recommendation === 'fix_crashes' ? 'improve' : 'keep',
+        advice: r.recommendation === 'fix_crashes'
+          ? `${r.crashPercentage}% of the attempts end with the app closing (limit ${r.maxCrashPercentage}%): fix the crash first.`
+          : (r.priorities.length
+            ? `Crashes are under control. Next change to prioritize: ${r.priorities[0].change.toLowerCase()}.`
+            : 'No failed review submissions in this period.'),
+        key: pct(r.crashImpactPercentage),
+        label: `of the reviews students tried to publish were lost by a crash (${r.lostToCrashes} lost, ` +
+          `${r.reviewsPublished} published, ${r.crashes} crashes in ${r.attempts} attempts)`,
+        months: r.byMonth.map(m => ({ month: m.month, value: `${m.crashes} crashes / ${m.reviewsPublished} reviews` })),
+        chart: { type: 'bar', label: 'Failed attempts', labels: r.priorities.map(p => p.issue), values: r.priorities.map(p => p.failures) },
+      }),
+    },
     {
       bq: 'BQ14', author: 'Esteban Alvarado', endpoint: '/api/v1/analytics/map-display-issues?months=3&maxIssuePercentage=10',
       mine: true, wide: true,
@@ -244,10 +262,11 @@
 
       const nodes = [];
       if (view.recommendation) {
-        nodes.push(el('div', `recommendation ${view.recommendation}`, view.recommendation.toUpperCase()));
-        nodes.push(el('div', 'key-label', view.recommendation === 'improve'
+        // tone y advice son opcionales, si la tarjeta no los trae se usan los textos de la BQ14.
+        nodes.push(el('div', `recommendation ${view.tone || view.recommendation}`, view.recommendation.toUpperCase()));
+        nodes.push(el('div', 'key-label', view.advice || (view.recommendation === 'improve'
           ? 'The map shows too many wrong or missing locations: improve or change it.'
-          : 'The map works well enough: keep it.'));
+          : 'The map works well enough: keep it.')));
       }
       nodes.push(el('div', 'key', String(view.key)), el('div', 'key-label', view.label));
       if (view.months) {
