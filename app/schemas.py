@@ -82,6 +82,7 @@ class MenuItemOut(ApiModel):
     description: str
     price: str
     is_student_pick: bool
+    image_url: str | None = None   # foto del plato, relativa a la URL del backend ("fotos/....jpg")
 
 
 class ReviewOut(ApiModel):
@@ -116,7 +117,8 @@ class SpotSummaryOut(ApiModel):
     total_reviews: int
     latitude: float | None = None   # WGS84; con esto el mapa del front pone cada pin en su sitio
     longitude: float | None = None
-    
+    image_url: str | None = None    # foto del restaurante, relativa a la URL del backend; si falta, el front usa el emoji
+
     @field_validator("rating")
     @classmethod
     def one_decimal(cls, v: float) -> float:

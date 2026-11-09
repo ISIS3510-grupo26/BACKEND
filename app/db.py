@@ -153,7 +153,8 @@ CREATE INDEX IF NOT EXISTS idx_wtr_spot_time ON wait_time_reports(spot_id, repor
 # tablas que ya existen, asi que las bases creadas antes se actualizan aqui (idempotente).
 ADDED_COLUMNS = {
         "spots": [("latitude", "REAL"), ("longitude", "REAL"), ("cuisines", "TEXT"), ("flavors", "TEXT"),
-                  ("meal_styles", "TEXT"), ("contains", "TEXT")],
+                  ("meal_styles", "TEXT"), ("contains", "TEXT"), ("image_url", "TEXT")],
+    "menu_items": [("image_url", "TEXT")],
     "page_load_events": [("user_id", "TEXT")],
     "reviews": [("user_id", "TEXT"), ("created_at", "TEXT")],
     "users": [("token_version", "INTEGER NOT NULL DEFAULT 0")],

@@ -4,6 +4,7 @@
     "emoji": "🍔",
     "emoji_background": "#FFFBEB",
     "emoji_border": "#FEF3C7",
+    "image_url": "fotos/conda-de-bons.jpg",
     "name": "Conda de Bons",
     "subtitle": "Burgers & Fries • North Quad Plaza",
     "rating": 5.0,
@@ -38,6 +39,7 @@
       {
         "emoji": "🍔",
         "emoji_background": "#FFFBEB",
+        "image_url": "fotos/conda-de-bons--classic-cheese-smash.jpg",
         "name": "Classic Cheese Smash",
         "description": "Double patty, cheddar, house sauce.",
         "price": "$18.500",
@@ -46,6 +48,7 @@
       {
         "emoji": "🍟",
         "emoji_background": "#FFF7ED",
+        "image_url": "fotos/conda-de-bons--crispy-fries.jpg",
         "name": "Crispy Fries",
         "description": "Sea salt, paprika, garlic mayo.",
         "price": "$7.000"
@@ -53,6 +56,7 @@
       {
         "emoji": "🥤",
         "emoji_background": "#FEF2F2",
+        "image_url": "fotos/conda-de-bons--strawberry-shake.jpg",
         "name": "Strawberry Shake",
         "description": "Fresh strawberries, vanilla ice cream.",
         "price": "$8.000"
@@ -100,6 +104,7 @@
     "emoji": "🥗",
     "emoji_background": "#ECFDF5",
     "emoji_border": "#D1FAE5",
+    "image_url": "fotos/green-bowl-co.jpg",
     "name": "Green Bowl Co.",
     "subtitle": "Healthy Bowls • Central Library 1F",
     "rating": 4.0,
@@ -140,6 +145,7 @@
       {
         "emoji": "🥗",
         "emoji_background": "#ECFDF5",
+        "image_url": "fotos/green-bowl-co--green-power-bowl.jpg",
         "name": "Green Power Bowl",
         "description": "Quinoa, avocado, chickpeas, tahini.",
         "price": "$15.000",
@@ -148,6 +154,7 @@
       {
         "emoji": "🍜",
         "emoji_background": "#FFF7ED",
+        "image_url": "fotos/green-bowl-co--teriyaki-tofu-bowl.jpg",
         "name": "Teriyaki Tofu Bowl",
         "description": "Brown rice, broccoli, sesame.",
         "price": "$16.000"
@@ -155,6 +162,7 @@
       {
         "emoji": "🥤",
         "emoji_background": "#F0FDF4",
+        "image_url": "fotos/green-bowl-co--detox-green-juice.jpg",
         "name": "Detox Green Juice",
         "description": "Spinach, apple, ginger, lime.",
         "price": "$7.500"
@@ -200,6 +208,7 @@
     "emoji": "☕",
     "emoji_background": "#FFF7ED",
     "emoji_border": "#FFEDD5",
+    "image_url": "fotos/nitro-coffee.jpg",
     "name": "Nitro Coffee & Brew",
     "subtitle": "Café & Bakery • Science Bldg Patio",
     "rating": 5.0,
@@ -241,6 +250,7 @@
       {
         "emoji": "☕",
         "emoji_background": "#FFF7ED",
+        "image_url": "fotos/nitro-coffee--nitro-cold-brew.jpg",
         "name": "Nitro Cold Brew",
         "description": "Slow-steeped 18h, nitrogen infused.",
         "price": "$6.500",
@@ -249,6 +259,7 @@
       {
         "emoji": "🥐",
         "emoji_background": "#FFFBEB",
+        "image_url": "fotos/nitro-coffee--butter-croissant.jpg",
         "name": "Butter Croissant",
         "description": "Baked fresh every morning.",
         "price": "$4.500"
@@ -256,6 +267,7 @@
       {
         "emoji": "🍪",
         "emoji_background": "#FEF2F2",
+        "image_url": "fotos/nitro-coffee--choc-chip-cookie.jpg",
         "name": "Choc Chip Cookie",
         "description": "Sea salt, dark chocolate.",
         "price": "$3.500"
@@ -292,6 +304,7 @@
     "emoji": "🌮",
     "emoji_background": "#FFFBEB",
     "emoji_border": "#FEF3C7",
+    "image_url": "fotos/taqueria-la-esquina.jpg",
     "name": "Taquería La Esquina",
     "subtitle": "Mexican Street Food • South Gate",
     "rating": 4.0,
@@ -327,6 +340,7 @@
       {
         "emoji": "🌮",
         "emoji_background": "#FFFBEB",
+        "image_url": "fotos/taqueria-la-esquina--al-pastor-tacos-x3.jpg",
         "name": "Al Pastor Tacos (x3)",
         "description": "Pineapple, cilantro, onion, salsa verde.",
         "price": "$12.000",
@@ -335,6 +349,7 @@
       {
         "emoji": "🌯",
         "emoji_background": "#FFF7ED",
+        "image_url": "fotos/taqueria-la-esquina--chicken-burrito.jpg",
         "name": "Chicken Burrito",
         "description": "Rice, black beans, pico de gallo.",
         "price": "$14.000"
@@ -342,6 +357,7 @@
       {
         "emoji": "🥑",
         "emoji_background": "#ECFDF5",
+        "image_url": "fotos/taqueria-la-esquina--guac-chips.jpg",
         "name": "Guac & Chips",
         "description": "Fresh avocado, lime, tortilla chips.",
         "price": "$6.000"
@@ -380,6 +396,7 @@
     "emoji": "🍔",
     "emoji_background": "#FFFBEB",
     "emoji_border": "#FEF3C7",
+    "image_url": "fotos/la-esquina-burger-lab.jpg",
     "name": "La Esquina Burger Lab",
     "subtitle": "Burgers & Craft Shakes • Central Plaza",
     "rating": 4.8,
@@ -414,6 +431,7 @@
       {
         "emoji": "🍔",
         "emoji_background": "#FFFBEB",
+        "image_url": "fotos/la-esquina-burger-lab--smash-bacon-garlic.jpg",
         "name": "Smash Bacon & Garlic",
         "description": "Double smash, provolone, garlic aioli.",
         "price": "$18.500"
@@ -421,6 +439,7 @@
       {
         "emoji": "🥬",
         "emoji_background": "#ECFDF5",
+        "image_url": "fotos/la-esquina-burger-lab--crispy-veggie-lentil.jpg",
         "name": "Crispy Veggie Lentil",
         "description": "Caramelized onions, oat bun.",
         "price": "$16.500",
@@ -429,6 +448,7 @@
       {
         "emoji": "🍟",
         "emoji_background": "#FFF7ED",
+        "image_url": "fotos/la-esquina-burger-lab--loaded-truffle-fries.jpg",
         "name": "Loaded Truffle Fries",
         "description": "Parmesan, fresh chives, truffle dip.",
         "price": "$9.000"
@@ -436,6 +456,7 @@
       {
         "emoji": "🍋",
         "emoji_background": "#F0FDF4",
+        "image_url": "fotos/la-esquina-burger-lab--artisan-mint-lemonade.jpg",
         "name": "Artisan Mint Lemonade",
         "description": "Fresh mint, panela syrup, crushed ice.",
         "price": "$5.500"
@@ -492,6 +513,7 @@
     "emoji": "🍕",
     "emoji_background": "#FFF7ED",
     "emoji_border": "#FFEDD5",
+    "image_url": "fotos/poodle-pizza-slices.jpg",
     "name": "Poodle Pizza Slices",
     "subtitle": "Wood-Fired Pizza • West Gate Courtyard",
     "rating": 4.7,
@@ -526,6 +548,7 @@
       {
         "emoji": "🍕",
         "emoji_background": "#FFF7ED",
+        "image_url": "fotos/poodle-pizza-slices--margherita-slice.jpg",
         "name": "Margherita Slice",
         "description": "San Marzano, fresh basil, mozzarella.",
         "price": "$9.000",
@@ -534,6 +557,7 @@
       {
         "emoji": "🍕",
         "emoji_background": "#FEF2F2",
+        "image_url": "fotos/poodle-pizza-slices--pepperoni-slice.jpg",
         "name": "Pepperoni Slice",
         "description": "Cup-and-char pepperoni, hot honey.",
         "price": "$11.000"
@@ -541,6 +565,7 @@
       {
         "emoji": "🥤",
         "emoji_background": "#F0FDF4",
+        "image_url": "fotos/poodle-pizza-slices--italian-soda.jpg",
         "name": "Italian Soda",
         "description": "Blood orange or lemon.",
         "price": "$5.000"
@@ -579,6 +604,7 @@
     "emoji": "🌭",
     "emoji_background": "#FEF2F2",
     "emoji_border": "#FEE2E2",
+    "image_url": "fotos/el-vagon-street-food.jpg",
     "name": "El Vagón Street Food",
     "subtitle": "Hot Dogs & Loaded Fries • Sports Arena",
     "rating": 4.5,
@@ -613,6 +639,7 @@
       {
         "emoji": "🌭",
         "emoji_background": "#FEF2F2",
+        "image_url": "fotos/el-vagon-street-food--classic-perro.jpg",
         "name": "Classic Perro",
         "description": "Crushed chips, pineapple sauce, quail egg.",
         "price": "$8.500",
@@ -621,6 +648,7 @@
       {
         "emoji": "🍟",
         "emoji_background": "#FFF7ED",
+        "image_url": "fotos/el-vagon-street-food--salchipapa-loaded.jpg",
         "name": "Salchipapa Loaded",
         "description": "Fries, sausage, cheese, three sauces.",
         "price": "$14.000"
@@ -628,6 +656,7 @@
       {
         "emoji": "🥤",
         "emoji_background": "#FFFBEB",
+        "image_url": "fotos/el-vagon-street-food--lulo-juice.jpg",
         "name": "Lulo Juice",
         "description": "Fresh lulo, ice, a touch of sugar.",
         "price": "$4.500"

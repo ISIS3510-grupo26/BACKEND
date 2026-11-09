@@ -9,7 +9,7 @@ SEED_FILE = Path(__file__).resolve().parent.parent / "seed_spots.json"
 _SPOT_COLUMNS = (
     "id", "emoji", "emoji_background", "emoji_border", "name", "subtitle", "rating",
     "price", "distance", "walk_minutes", "is_budget", "is_vegetarian", "is_high_protein",
-    "affinity_percent", "category", "note_label", "note", "uni_card_perk", "total_reviews",
+    "affinity_percent", "category", "note_label", "note", "uni_card_perk", "total_reviews", "image_url",
 )
 # Coordenadas: las usan la BQ5 y la BQ3 en el servidor, y el mapa de la app Kotlin para ubicar los pines.
 _GEO_COLUMNS = ("latitude", "longitude")
@@ -62,7 +62,7 @@ class SpotsRepository:
         spot = _row_to_dict(row)
         spot["menu"] = [
             _row_to_dict(r) for r in self.conn.execute(
-                "SELECT emoji, emoji_background, name, description, price, is_student_pick "
+                "SELECT emoji, emoji_background, name, description, price, is_student_pick, image_url "
                 "FROM menu_items WHERE spot_id = ? ORDER BY position", (spot_id,),
             )
         ]
@@ -129,10 +129,10 @@ class SpotsRepository:
                     self.conn.execute(f"DELETE FROM {table} WHERE spot_id = ?", (spot["id"],))
                 self.conn.execute("DELETE FROM reviews WHERE spot_id = ? AND user_id IS NULL", (spot["id"],))
                 self.conn.executemany(
-                    "INSERT INTO menu_items (spot_id, position, emoji, emoji_background, name, description, price, is_student_pick) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO menu_items (spot_id, position, emoji, emoji_background, name, description, price, "
+                    "is_student_pick, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     [(spot["id"], pos, item["emoji"], item["emoji_background"], item["name"],
-                      item["description"], item["price"], item.get("is_student_pick", False))
+                      item["description"], item["price"], item.get("is_student_pick", False), item.get("image_url"))
                      for pos, item in enumerate(spot["menu"])],
                 )
                 self.conn.executemany(

@@ -129,6 +129,29 @@
       }),
     },
     {
+      // BQ4 (tipo 2): ultimo tiempo de espera reportado por restaurante. Un reporte de mas de 2 h sale gris.
+      bq: 'BQ4', author: 'Tomas Diaz', endpoint: '/api/v1/spots/wait-times/latest?freshMinutes=120',
+      wide: true,
+      render: r => {
+        const conReporte = r.spots.filter(s => s.minutes !== null);
+        const recientes = conReporte.filter(s => s.isRecent);
+        const hace = m => (m < 60 ? `${m} min ago` : m < 1440 ? `${Math.floor(m / 60)} h ago` : `${Math.floor(m / 1440)} d ago`);
+        return {
+          key: `${recientes.length} / ${r.spots.length}`,
+          label: `restaurants have a wait report from the last ${r.freshMinutes / 60} h ` +
+            `(${conReporte.length} have at least one report)`,
+          months: conReporte.map(s => ({
+            month: `${s.emoji} ${s.name}`,
+            value: `${s.minutes} min · ${hace(s.minutesAgo)}${s.isRecent ? '' : ' (outdated)'}`,
+          })),
+          chart: {
+            type: 'bar', label: 'Last reported wait (min)',
+            labels: conReporte.map(s => s.name), values: conReporte.map(s => s.minutes),
+          },
+        };
+      },
+    },
+    {
       bq: 'BQ6', author: 'Lucas Galindo', endpoint: '/api/v1/recommendations/best-for-you?freshMinutes=120&limit=5',
       render: r => {
         const top = r.spots[0];
