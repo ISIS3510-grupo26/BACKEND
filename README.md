@@ -90,7 +90,7 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | GET | `/api/v1/spots` | Lista resumida de restaurantes (sin menú ni reseñas) |
 | GET | `/api/v1/spots/{id}` | Información completa del restaurante: **esta es la "restaurant page load"** que se mide |
 | POST | `/api/v1/spots/{id}/reviews` | Publicar calificación con token (`stars` 1–5, `text` opcional). Guarda la reseña y actualiza el promedio en una sola transacción (Unit of Work). `409` si el usuario ya calificó ese restaurante |
-| POST | `/api/v1/telemetry/page-loads` | Lote de eventos (1–500), idempotente por `eventId`. `screen` = `restaurant_detail` (vista de página), `search` (elegido desde el buscador) o `favorite_added` (guardó el restaurante; exige `userId` y `spotId`) |
+| POST | `/api/v1/telemetry/page-loads` | Lote de eventos (1–500), idempotente por `eventId`. `screen` = `restaurant_detail` (vista de página), `search` (elegido desde el buscador), `favorite_added` (guardó el restaurante; exige `userId` y `spotId`), `recommendation_open` (lo abrió desde una recomendación por compatibilidad) o `recommendation_visit` (llegó a ese restaurante); estos dos últimos exigen `spotId` |
 | GET | `/api/v1/analytics/slow-page-loads` | BQ1 |
 | GET | `/api/v1/analytics/failed-requests` | BQ2 |
 | GET | `/api/v1/analytics/spot-views-by-hour` | BQ3 (vistas + búsquedas por restaurante en cada hora) |

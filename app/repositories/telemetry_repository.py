@@ -11,6 +11,9 @@ MAP_SCREEN = "map_display"  # BQ14: una carga del mapa (Taste Map) o una falla d
 TILES_FAILED = "tiles_failed"  # el unico error_type de map_display que no es una carga nueva
 REVIEW_SCREEN = "review_submit"  # BQ13: un intento de publicar una reseña (eventId = id del intento)
 CRASH = "crash"  # BQ13: la app se cerro mientras enviaba la reseña
+RECOMMENDATION_OPEN = "recommendation_open"  # BQ9: abrio un restaurante desde una recomendacion por compatibilidad
+RECOMMENDATION_VISIT = "recommendation_visit"  # BQ9: llego a ese restaurante (la app lo detecta por GPS)
+RECOMMENDATION_SCREENS = (RECOMMENDATION_OPEN, RECOMMENDATION_VISIT)
 
 # Columnas por las que se permite agrupar (lista blanca: nunca se interpola input del usuario).
 GROUP_EXPRESSIONS = {
