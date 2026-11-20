@@ -234,3 +234,41 @@ class TelemetryRepository:
             "GROUP BY month",
             [str(tz_offset_minutes), str(tz_offset_minutes), first_month, last_month],
         ).fetchall()
+
+    def recommendation_visits(self, tz_offset_minutes: int, first_month: str, last_month: str,
+                              by_month: bool) -> list[sqlite3.Row]:
+        """BQ9: usuarios que abrieron recomendaciones y cuantos de ellos visitaron, por mes local o en toda la ventana.
+
+        Un visitante cuenta en el mes solo si ese mismo mes abrio una recomendacion: asi la tasa nunca pasa de 100.
+        Los eventos sin userId (la app sin sesion) no cuentan para usuarios, pero si para aperturas y visitas.
+        """
+        local_month = "strftime('%Y-%m', occurred_at, ? || ' minutes')"
+        bucket = local_month if by_month else "'ALL'"
+        events = (f"SELECT {bucket} AS month, screen, user_id FROM page_load_events "
+                  f"WHERE screen IN (?, ?) AND {local_month} BETWEEN ? AND ?")
+        params: list = ([str(tz_offset_minutes)] if by_month else []) + [
+            RECOMMENDATION_OPEN, RECOMMENDATION_VISIT, str(tz_offset_minutes), first_month, last_month]
+        return self.conn.execute(
+            f"WITH events AS ({events}), "
+            "     openers AS (SELECT DISTINCT month, user_id FROM events WHERE screen = ? AND user_id IS NOT NULL), "
+            "     visitors AS (SELECT DISTINCT month, user_id FROM events WHERE screen = ? AND user_id IS NOT NULL), "
+            "     totals AS (SELECT month, SUM(screen = ?) AS opens, SUM(screen = ?) AS visits FROM events GROUP BY month) "
+            "SELECT t.month AS month, t.opens AS opens, t.visits AS visits, "
+            "       (SELECT COUNT(*) FROM openers o WHERE o.month = t.month) AS users_recommended, "
+            "       (SELECT COUNT(*) FROM openers o JOIN visitors v ON v.month = o.month AND v.user_id = o.user_id "
+            "        WHERE o.month = t.month) AS users_visited "
+            "FROM totals t ORDER BY t.month",
+            [*params, RECOMMENDATION_OPEN, RECOMMENDATION_VISIT, RECOMMENDATION_OPEN, RECOMMENDATION_VISIT],
+        ).fetchall()
+
+    def top_recommended_visits(self, tz_offset_minutes: int, first_month: str, last_month: str,
+                               limit: int = 5) -> list[sqlite3.Row]:
+        """BQ9: restaurantes recomendados a los que mas llegaron los estudiantes en la ventana."""
+        local_month = "strftime('%Y-%m', e.occurred_at, ? || ' minutes')"
+        return self.conn.execute(
+            "SELECT e.spot_id AS spot_id, s.name AS name, s.emoji AS emoji, COUNT(*) AS visits "
+            "FROM page_load_events e LEFT JOIN spots s ON s.id = e.spot_id "
+            f"WHERE e.screen = ? AND e.spot_id IS NOT NULL AND {local_month} BETWEEN ? AND ? "
+            "GROUP BY e.spot_id ORDER BY visits DESC, e.spot_id LIMIT ?",
+            [RECOMMENDATION_VISIT, str(tz_offset_minutes), first_month, last_month, limit],
+        ).fetchall()
