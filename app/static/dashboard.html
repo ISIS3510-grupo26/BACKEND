@@ -172,6 +172,22 @@
       }),
     },
     {
+      // BQ9 (tipo 3): de los usuarios que abrieron recomendaciones por compatibilidad, % que llego al restaurante.
+      bq: 'BQ9', author: 'Esteban Alvarado', endpoint: '/api/v1/analytics/recommendation-visits?months=6',
+      mine: true,
+      render: r => {
+        const m = last(r.byMonth);
+        const top = r.topVisitedSpots[0];
+        return {
+          key: pct(m.visitRatePercentage),
+          label: `${m.usersVisited} of ${m.usersRecommended} students who opened a recommendation went there in ${m.month}` +
+            (top ? ` · most visited: ${top.emoji || ''} ${top.name || top.spotId}` : ''),
+          months: r.byMonth.map(x => ({ month: x.month, value: `${x.visits} visits / ${x.recommendationOpens} opens` })),
+          chart: { type: 'line', label: '% of students who visited', labels: r.byMonth.map(x => x.month), values: r.byMonth.map(x => x.visitRatePercentage) },
+        };
+      },
+    },
+    {
       bq: 'BQ10', author: 'Gabriela Perdomo', endpoint: '/api/v1/analytics/rating-usage?months=6',
       render: r => ({
         key: pct(last(r.byMonth).ratingUsagePercentage),
