@@ -3,16 +3,18 @@ import asyncio
 import random
 import sqlite3
 from datetime import datetime, timezone
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.config import settings
 from app.db import get_conn
 from app.repositories.spots_repository import SpotsRepository
-from app.schemas import (LastWaitTimesReport, ReviewCreatedOut, ReviewIn, SpotDetailOut, SpotSummaryOut,
-                         WaitTimeReportIn, WaitTimeReportOut)
-from app.security import optional_user_id, require_user_id
-from app.services.reviews_service import AlreadyReviewed, ReviewsService, SpotNotFound
+from app.repositories.users_repository import UsersRepository
+from app.schemas import (LastWaitTimesReport, ReviewCreatedOut, ReviewIn, ReviewPageOut, SpotDetailOut,
+                         SpotSummaryOut, WaitTimeReportIn, WaitTimeReportOut)
+from app.security import get_users_repo, optional_user_id, require_user_id, resolve_acting_user, unauthorized
+from app.services.reviews_service import AlreadyReviewed, ReviewNotFound, ReviewsService, SpotNotFound
 from app.services import wait_times_service
 from app.services.wait_times_service import ReportFromFuture, WaitTimesService
 
@@ -68,6 +70,58 @@ def create_review(spot_id: str, body: ReviewIn, user_id: str = Depends(require_u
         raise HTTPException(status_code=404, detail=f"Spot '{spot_id}' not found")
     except AlreadyReviewed:
         raise HTTPException(status_code=409, detail="You already reviewed this spot")
+
+
+@router.get("/{spot_id}/reviews", response_model=ReviewPageOut)
+def list_reviews(
+    spot_id: str,
+    sort: Literal["newest", "highest", "lowest", "helpful"] = Query("newest"),
+    stars: int | None = Query(None, ge=1, le=5, description="Solo reseñas con estas estrellas"),
+    q: str | None = Query(None, max_length=100, description="Busca en el texto y el autor, sin distinguir mayusculas"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, alias="pageSize", ge=1, le=50),
+    conn: sqlite3.Connection = Depends(get_conn),
+):
+    """Todas las reseñas de un restaurante (vista "All reviews"), paginadas."""
+    try:
+        return ReviewsService(conn).page(spot_id, sort, stars, q, page, page_size)
+    except SpotNotFound:
+        raise HTTPException(status_code=404, detail=f"Spot '{spot_id}' not found")
+
+
+def helpful_voter(
+    user_id: str | None = Query(None, alias="userId", max_length=128,
+                                description="Solo sin token: id de desarrollo, como en favoritos"),
+    token_user_id: str | None = Depends(optional_user_id),
+    users: UsersRepository = Depends(get_users_repo),
+) -> str:
+    """Quien vota, igual que en favoritos: el del token, o sin token un id de desarrollo que no sea una cuenta."""
+    acting = resolve_acting_user(user_id, token_user_id, users)
+    if acting is None:
+        raise unauthorized("Sign in (or pass userId in development) to mark reviews as helpful")
+    return acting
+
+
+def _set_helpful(conn: sqlite3.Connection, spot_id: str, review_id: int, user_id: str, helpful: bool) -> Response:
+    try:
+        ReviewsService(conn).set_helpful(spot_id, review_id, user_id, helpful)
+    except ReviewNotFound:
+        raise HTTPException(status_code=404, detail=f"Review {review_id} not found in spot '{spot_id}'")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/{spot_id}/reviews/{review_id}/helpful", status_code=status.HTTP_204_NO_CONTENT)
+def mark_helpful(spot_id: str, review_id: int, user_id: str = Depends(helpful_voter),
+                 conn: sqlite3.Connection = Depends(get_conn)):
+    """Marca la reseña como Helpful. Idempotente: repetirlo responde 204 sin sumar otra vez."""
+    return _set_helpful(conn, spot_id, review_id, user_id, helpful=True)
+
+
+@router.delete("/{spot_id}/reviews/{review_id}/helpful", status_code=status.HTTP_204_NO_CONTENT)
+def unmark_helpful(spot_id: str, review_id: int, user_id: str = Depends(helpful_voter),
+                   conn: sqlite3.Connection = Depends(get_conn)):
+    """Quita el Helpful. Idempotente: sin voto previo responde 204 sin restar."""
+    return _set_helpful(conn, spot_id, review_id, user_id, helpful=False)
 
 
 @router.post("/{spot_id}/wait-times", response_model=WaitTimeReportOut, status_code=status.HTTP_201_CREATED)

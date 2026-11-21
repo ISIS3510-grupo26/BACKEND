@@ -106,13 +106,35 @@ class SpotsRepository:
         rows = self.conn.execute("SELECT spot_id FROM reviews WHERE user_id = ?", (user_id,)).fetchall()
         return {r["spot_id"] for r in rows}
 
+    def _sync_catalog_reviews(self, spot_id: str, reviews: list[dict]) -> None:
+        """Reseñas del catalogo por posicion, actualizadas en su lugar: conservan su id, asi los votos Helpful
+        (review_helpful_votes) siguen apuntando a ellas despues de reiniciar. helpful_count = el del seed + votos."""
+        existing = {r["position"]: r["id"] for r in self.conn.execute(
+            "SELECT id, position FROM reviews WHERE spot_id = ? AND user_id IS NULL", (spot_id,))}
+        for pos, review in enumerate(reviews):
+            values = (review["author_name"], review["initials"], review["program"], review["stars"], review["text"],
+                      review["dined_ago"], review["helpful_count"])
+            if pos in existing:
+                self.conn.execute(
+                    "UPDATE reviews SET author_name = ?, initials = ?, program = ?, stars = ?, text = ?, dined_ago = ?, "
+                    "helpful_count = ? + (SELECT COUNT(*) FROM review_helpful_votes v WHERE v.review_id = reviews.id) "
+                    "WHERE id = ?", (*values, existing[pos]))
+            else:
+                self.conn.execute(
+                    "INSERT INTO reviews (spot_id, position, author_name, initials, program, stars, text, dined_ago, "
+                    "helpful_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (spot_id, pos, *values))
+        removed = [review_id for pos, review_id in existing.items() if pos >= len(reviews)]
+        for review_id in removed:  # una reseña que salio del seed se va con sus votos
+            self.conn.execute("DELETE FROM review_helpful_votes WHERE review_id = ?", (review_id,))
+            self.conn.execute("DELETE FROM reviews WHERE id = ?", (review_id,))
+
     def sync_catalog(self) -> None:
         """Carga el catalogo de seed_spots.json, que es su unica fuente (la API no escribe restaurantes).
 
         Corre en cada arranque y es idempotente: las bases nuevas quedan sembradas y las ya existentes se
         actualizan (p. ej. coordenadas y horarios de la BQ5) sin un paso de migracion aparte. Los restaurantes
-        se actualizan con upsert, no se borran, porque favorites los referencia; menu, reseñas y horarios se
-        reemplazan completos.Excepción: las reseñas de usuarios (user_id no nulo) y el rating/total_reviews
+        se actualizan con upsert, no se borran, porque favorites los referencia; menu y horarios se
+        reemplazan completos y las reseñas del catalogo se actualizan en su lugar (ver _sync_catalog_reviews). Excepción: las reseñas de usuarios (user_id no nulo) y el rating/total_reviews
         que ellas cambiaron no se tocan, si no cada reinicio del servidor borraria lo que publicaron."""
         spots = json.loads(SEED_FILE.read_text(encoding="utf-8"))
         columns = (*_PUBLIC_COLUMNS, *_MATCH_COLUMNS)
@@ -127,20 +149,13 @@ class SpotsRepository:
                                            for c in columns])
                 for table in ("menu_items", "spot_opening_hours"):
                     self.conn.execute(f"DELETE FROM {table} WHERE spot_id = ?", (spot["id"],))
-                self.conn.execute("DELETE FROM reviews WHERE spot_id = ? AND user_id IS NULL", (spot["id"],))
+                self._sync_catalog_reviews(spot["id"], spot["reviews"])
                 self.conn.executemany(
                     "INSERT INTO menu_items (spot_id, position, emoji, emoji_background, name, description, price, "
                     "is_student_pick, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     [(spot["id"], pos, item["emoji"], item["emoji_background"], item["name"],
                       item["description"], item["price"], item.get("is_student_pick", False), item.get("image_url"))
                      for pos, item in enumerate(spot["menu"])],
-                )
-                self.conn.executemany(
-                    "INSERT INTO reviews (spot_id, position, author_name, initials, program, stars, text, dined_ago, helpful_count) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    [(spot["id"], pos, review["author_name"], review["initials"], review["program"],
-                      review["stars"], review["text"], review["dined_ago"], review["helpful_count"])
-                     for pos, review in enumerate(spot["reviews"])],
                 )
                 self.conn.executemany(
                     "INSERT INTO spot_opening_hours (spot_id, day_of_week, opens_at, closes_at) VALUES (?, ?, ?, ?)",
