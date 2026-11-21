@@ -147,6 +147,15 @@ CREATE TABLE IF NOT EXISTS wait_time_reports (
 );
 
 CREATE INDEX IF NOT EXISTS idx_wtr_spot_time ON wait_time_reports(spot_id, reported_at);
+
+-- Votos "Helpful" de cada usuario a una resena. La llave primaria hace que votar dos veces no sume dos;
+-- reviews.helpful_count se actualiza en la misma transaccion que el voto (base del catalogo + votos).
+CREATE TABLE IF NOT EXISTS review_helpful_votes (
+    user_id    TEXT NOT NULL,
+    review_id  INTEGER NOT NULL REFERENCES reviews(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (user_id, review_id)
+);
 """
 
 # Columnas agregadas despues de la primera version del esquema. CREATE TABLE IF NOT EXISTS no altera
@@ -167,6 +176,9 @@ def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(settings.db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # lower() y LIKE de SQLite solo ignoran mayusculas en ASCII; la busqueda de reseñas usa casefold de Python,
+    # asi "ÑAME" encuentra "ñame" y "Día" encuentra "DÍA".
+    conn.create_function("casefold", 1, lambda s: s.casefold() if isinstance(s, str) else s, deterministic=True)
     return conn
 
 

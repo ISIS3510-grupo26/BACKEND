@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from app.config import settings
 from app.db import get_conn
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import (FailedRequestsReport, MapDisplayIssuesReport, MonthlyActiveFavoritersReport, RatingUsageReport, ReviewCrashesReport, SlowLoadsReport, SpotViewsByHourReport, SearchesByWeekdayReport)
+from app.schemas import (FailedRequestsReport, MapDisplayIssuesReport, MonthlyActiveFavoritersReport, RatingUsageReport, ReviewCrashesReport, ReviewInteractionsReport, SlowLoadsReport, SpotViewsByHourReport, SearchesByWeekdayReport)
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
@@ -74,6 +74,17 @@ def rating_usage(
 ):
     """BQ10 (tipo 3): % de usuarios que, habiendo visto paginas de restaurantes en el mes, publicaron una calificacion."""
     return service.rating_usage(months=months, tz_offset_minutes=tz_offset_minutes, platform=platform)
+
+
+@router.get("/review-interactions", response_model=ReviewInteractionsReport)
+def review_interactions(
+    months: int = Query(6, ge=1, le=36, description="Meses calendario hacia atras, incluido el actual"),
+    tz_offset_minutes: int = Query(settings.campus_tz_offset_minutes, alias="tzOffsetMinutes", ge=-840, le=840),
+    platform: str | None = Query(None, description="Filtra las visitas por app: android-kotlin, flutter, ..."),
+    service: AnalyticsService = Depends(get_service),
+):
+    """BQ8 (tipo 3): % de visitas a la pagina de un restaurante que incluyen una interaccion con las reseñas, por mes."""
+    return service.review_interactions(months=months, tz_offset_minutes=tz_offset_minutes, platform=platform)
 
 
 @router.get("/searches-by-weekday", response_model=SearchesByWeekdayReport)

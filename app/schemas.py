@@ -95,6 +95,18 @@ class ReviewOut(ApiModel):
     helpful_count: int
 
 
+class ReviewItemOut(ReviewOut):
+    id: int                            # para marcarla como Helpful
+    created_at: datetime | None = None  # solo en las reseñas de usuarios; las del catalogo no tienen fecha
+
+
+class ReviewPageOut(ApiModel):
+    items: list[ReviewItemOut]
+    page: int
+    page_size: int
+    total: int                         # reseñas que cumplen el filtro (todas las paginas)
+
+
 class SpotSummaryOut(ApiModel):
     id: str
     emoji: str
@@ -320,6 +332,23 @@ class MonthlyActiveFavoritersReport(ApiModel):
     months: int
     tz_offset_minutes: int
     by_month: list[MonthlyFavoriters]  # un elemento por mes de la ventana, del mas antiguo al actual (0 si no hubo)
+
+
+# ---------- BQ8: visitas a un restaurante que usan las reseñas ----------
+
+class MonthlyReviewInteractions(ApiModel):
+    month: str                     # 'YYYY-MM' en hora local del campus
+    page_visits: int               # restaurant_detail exitosos del mes
+    visits_with_interaction: int   # de esas visitas, cuantas tuvieron al menos un review_interaction
+    interaction_percentage: float
+    by_action: dict[str, int]      # visitas con cada accion (open_all, sort, filter, search, helpful); 0 si ninguna
+
+
+class ReviewInteractionsReport(ApiModel):
+    question: str
+    months: int
+    tz_offset_minutes: int
+    by_month: list[MonthlyReviewInteractions]  # un elemento por mes de la ventana, del mas antiguo al actual
 
 
 # ---------- BQ10: uso de la calificacion desde la pagina del restaurante ----------
