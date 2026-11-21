@@ -682,6 +682,6 @@ def test_dashboard_page(client):
     r = client.get("/dashboard")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
     for endpoint in ("slow-page-loads", "failed-requests", "monthly-active-favoriters", "rating-usage",
-                     "searches-by-weekday", "map-display-issues"):
+                     "searches-by-weekday", "map-display-issues", "review-interactions"):
         assert f"/api/v1/analytics/{endpoint}" in r.text
     assert "cdnjs.cloudflare.com" in r.text
