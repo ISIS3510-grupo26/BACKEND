@@ -172,6 +172,14 @@
       }),
     },
     {
+      bq: 'BQ8', author: 'Camilo Linares', endpoint: '/api/v1/analytics/review-interactions?months=6',
+      render: r => ({
+        key: pct(last(r.byMonth).interactionPercentage),
+        label: `${last(r.byMonth).visitsWithInteraction} of ${last(r.byMonth).pageVisits} restaurant visits used the reviews in ${last(r.byMonth).month}`,
+        chart: { type: 'bar', label: '% of visits with a review interaction', labels: r.byMonth.map(m => m.month), values: r.byMonth.map(m => m.interactionPercentage) },
+      }),
+    },
+    {
       bq: 'BQ10', author: 'Gabriela Perdomo', endpoint: '/api/v1/analytics/rating-usage?months=6',
       render: r => ({
         key: pct(last(r.byMonth).ratingUsagePercentage),
