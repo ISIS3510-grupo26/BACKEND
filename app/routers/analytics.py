@@ -7,7 +7,9 @@ from fastapi import APIRouter, Depends, Query
 from app.config import settings
 from app.db import get_conn
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import (FailedRequestsReport, MapDisplayIssuesReport, MonthlyActiveFavoritersReport, RatingUsageReport, ReviewCrashesReport, SlowLoadsReport, SpotViewsByHourReport, SearchesByWeekdayReport)
+from app.schemas import (FailedRequestsReport, MapDisplayIssuesReport, MonthlyActiveFavoritersReport, RatingUsageReport,
+                         RecommendationVisitsReport, ReviewCrashesReport, SlowLoadsReport, SpotViewsByHourReport,
+                         SearchesByWeekdayReport)
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
@@ -112,3 +114,13 @@ def review_crashes(
     return service.review_crashes(months=months, tz_offset_minutes=tz_offset_minutes,
                                   max_crash_percentage=max_crash_percentage)
     
+
+
+@router.get("/recommendation-visits", response_model=RecommendationVisitsReport)
+def recommendation_visits(
+    months: int = Query(6, ge=1, le=36, description="Meses calendario hacia atras, incluido el actual"),
+    tz_offset_minutes: int = Query(settings.campus_tz_offset_minutes, alias="tzOffsetMinutes", ge=-840, le=840),
+    service: AnalyticsService = Depends(get_service),
+):
+    """BQ9 (tipo 3): tasa de usuarios que visitan los restaurantes que la app les recomienda por compatibilidad."""
+    return service.recommendation_visits(months=months, tz_offset_minutes=tz_offset_minutes)

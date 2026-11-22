@@ -477,3 +477,33 @@ class ReviewCrashesReport(ReviewCrashStats):
     recommendation: Literal["fix_crashes", "keep"]  # fix_crashes si crash_percentage > max_crash_percentage
     priorities: list[ReviewPriority]  # cambios a priorizar, del problema mas frecuente al menos frecuente
     by_month: list[MonthlyReviewCrashes]  # un elemento por mes de la ventana, del mas antiguo al actual
+
+
+# ---------- BQ9: visitas a restaurantes recomendados por compatibilidad ----------
+
+class RecommendationVisitStats(ApiModel):
+    users_recommended: int            # usuarios distintos que abrieron al menos un restaurante recomendado
+    users_visited: int                # de ellos, cuantos llegaron a uno de esos restaurantes
+    visit_rate_percentage: float      # users_visited / users_recommended * 100, 1 decimal (la BQ9)
+    recommendation_opens: int         # eventos recommendation_open
+    visits: int                       # eventos recommendation_visit
+    opens_to_visits_percentage: float  # visits / recommendation_opens * 100, 1 decimal
+
+
+class MonthlyRecommendationVisits(RecommendationVisitStats):
+    month: str                        # 'YYYY-MM' en hora local del campus
+
+
+class VisitedSpot(ApiModel):
+    spot_id: str
+    name: str | None
+    emoji: str | None
+    visits: int
+
+
+class RecommendationVisitsReport(RecommendationVisitStats):
+    question: str
+    months: int
+    tz_offset_minutes: int
+    top_visited_spots: list[VisitedSpot]          # restaurantes recomendados a los que mas se llego, maximo 5
+    by_month: list[MonthlyRecommendationVisits]   # un elemento por mes de la ventana, del mas antiguo al actual
