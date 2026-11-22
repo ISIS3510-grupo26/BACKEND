@@ -4,7 +4,9 @@ from datetime import datetime, timedelta, timezone
 from app.repositories.telemetry_repository import TelemetryRepository
 from app.schemas import (FailedRequestsReport, FailureGroup, HourlyRanking, MapDisplayIssuesReport, MapDisplayStats,
                          MonthlyActiveFavoritersReport, MonthlyFavoriters, MonthlyMapDisplay, MonthlyRatingUsage, RatingUsageReport, SlowLoadGroup, SlowLoadsReport,
-                         SpotHourlyActivity, SpotViewsByHourReport, SearchesByWeekdayReport, WeekdaySearchCount)
+                         SpotHourlyActivity, SpotViewsByHourReport, SearchesByWeekdayReport, WeekdaySearchCount,
+                         MonthlyReviewCrashes, ReviewCrashesReport, ReviewCrashStats, ReviewPriority,
+                         MonthlyRecommendationVisits, RecommendationVisitsReport, RecommendationVisitStats, VisitedSpot)
 
 Q_SLOW = "What is the percentage of restaurant page loads that take more than {s:g} seconds? By device and OS"
 Q_FAILED = "What is the percentage of failed requests when loading the restaurant's information?"
@@ -14,6 +16,19 @@ Q_RATING_USAGE = "What percentage of users use the restaurant rating feature whe
 Q_SEARCHES_BY_WEEKDAY = "Which days of the week have the highest number of restaurant searches?"
 Q_MAP_DISPLAY = ("How many times does the app display the restaurant's location incorrectly on the map or not at all, "
                  "and should the map feature be improved or changed based on this?")
+Q_REVIEW_CRASHES = ("How does the number of app crashes during the restaurant review submission affect the number of "
+                    "reviews successfully published and what changes to the review submission feature should be "
+                    "prioritized based on this information?")
+# Que cambiar segun el tipo de falla (BQ13). Las llaves son los error_type que manda la app.
+REVIEW_CHANGES = {
+    "crash": "Fix why the app closes while sending a review",
+    "network": "Keep the draft offline and retry when the connection is back",
+    "server_error": "Fix the backend errors when saving a review",
+    "rejected": "Check the rating, session and duplicate review before sending",
+    "app_error": "Fix the app error that happens while sending",
+}
+Q_RECOMMENDATION_VISITS = ("What is the rate of users that visit restaurants based on the app's compatibility "
+                           "recommendations each month?")
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
@@ -28,6 +43,29 @@ def _map_stats(loads: int, issues_by_type: dict[str, int]) -> MapDisplayStats:
     return MapDisplayStats(map_loads=loads, issues=issues,
                            issue_percentage=round(100.0 * issues / loads, 1) if loads else 0.0,
                            issues_by_type=by_type, main_issue=next(iter(by_type), None))
+
+
+def _review_stats(attempts: int, published: int, failures: dict[str, int], saved_after_crash: int) -> dict:
+    """Totales de BQ13 para un mes o para toda la ventana."""
+    crashes = failures.get("crash", 0)
+    return ReviewCrashStats(
+        attempts=attempts, published=published, crashes=crashes,
+        crash_percentage=round(100.0 * crashes / attempts, 1) if attempts else 0.0,
+        saved_despite_crash=saved_after_crash, lost_to_crashes=crashes - saved_after_crash,
+        failures_by_type=dict(sorted(failures.items(), key=lambda kv: (-kv[1], kv[0]))),
+    ).model_dump()
+    
+    
+def _visit_stats(row) -> RecommendationVisitStats:
+    """Totales de BQ9 para un mes o para toda la ventana (fila de recommendation_visits o None)."""
+    opens, visits = (row["opens"], row["visits"]) if row else (0, 0)
+    recommended, visited = (row["users_recommended"], row["users_visited"]) if row else (0, 0)
+    return RecommendationVisitStats(
+        users_recommended=recommended, users_visited=visited,
+        visit_rate_percentage=round(100.0 * visited / recommended, 1) if recommended else 0.0,
+        recommendation_opens=opens, visits=visits,
+        opens_to_visits_percentage=round(100.0 * visits / opens, 1) if opens else 0.0,
+    )
 
 
 class AnalyticsService:
@@ -212,4 +250,91 @@ class AnalyticsService:
             max_issue_percentage=max_issue_percentage,
             recommendation="improve" if overall.issue_percentage > max_issue_percentage else "keep",
             by_month=[MonthlyMapDisplay(month=m, **_map_stats(loads[m], issues[m]).model_dump()) for m in window],
+        )
+
+    
+    def review_crashes(self, months: int, tz_offset_minutes: int, max_crash_percentage: float,
+                       now: datetime | None = None) -> ReviewCrashesReport:
+        """BQ13 (tipo *): como afectan los crashes al publicar una reseña al numero de reseñas publicadas.
+
+        Intentos y fallas salen de los eventos review_submit que manda la app; las reseñas publicadas salen de la
+        tabla reviews (el servidor es la fuente de verdad, como en la BQ10). Un crash cuya reseña no esta en la tabla
+        es una reseña perdida. Prioridades: los tipos de falla de mas a menos frecuentes, cada uno con que cambiar.
+        """
+        now = now or datetime.now(timezone.utc)
+        local = now.astimezone(timezone.utc) + timedelta(minutes=tz_offset_minutes)
+        index = local.year * 12 + local.month - 1
+        window = [f"{i // 12:04d}-{i % 12 + 1:02d}" for i in range(index - months + 1, index + 1)]
+
+        attempts = {m: 0 for m in window}
+        published = {m: 0 for m in window}
+        saved_after = {m: 0 for m in window}
+        failures: dict[str, dict[str, int]] = {m: {} for m in window}
+        for r in self.repo.review_submits_by_month(tz_offset_minutes, window[0], window[-1]):
+            m = r["month"]
+            attempts[m] += r["attempts"]
+            saved_after[m] += r["saved_after"]
+            if r["success"]:
+                published[m] += r["attempts"]
+            else:
+                failures[m][r["error_type"]] = failures[m].get(r["error_type"], 0) + r["attempts"]
+        reviews = {r["month"]: r["reviews"] for r in self.repo.user_reviews_by_month(tz_offset_minutes, window[0],
+                                                                                     window[-1])}
+
+        all_failures: dict[str, int] = {}
+        for month_failures in failures.values():
+            for kind, count in month_failures.items():
+                all_failures[kind] = all_failures.get(kind, 0) + count
+        overall = _review_stats(sum(attempts.values()), sum(published.values()), all_failures,
+                                sum(saved_after.values()))
+        total_reviews = sum(reviews.values())
+        lost = overall["lost_to_crashes"]
+        total_failures = sum(all_failures.values())
+        priorities = [
+            ReviewPriority(issue=kind, failures=count, share_percentage=_pct(count, total_failures),
+                           change=REVIEW_CHANGES.get(kind, "Find out what causes this error"))
+            for kind, count in overall["failures_by_type"].items()
+        ]
+        return ReviewCrashesReport(
+            **overall,
+            question=Q_REVIEW_CRASHES,
+            months=months,
+            tz_offset_minutes=tz_offset_minutes,
+            max_crash_percentage=max_crash_percentage,
+            reviews_published=total_reviews,
+            crash_impact_percentage=round(100.0 * lost / (total_reviews + lost), 1) if total_reviews + lost else 0.0,
+            recommendation="fix_crashes" if overall["crash_percentage"] > max_crash_percentage else "keep",
+            priorities=priorities,
+            by_month=[
+                MonthlyReviewCrashes(month=m, reviews_published=reviews.get(m, 0),
+                                     **_review_stats(attempts[m], published[m], failures[m], saved_after[m]))
+                for m in window
+            ],
+        )
+        
+
+    def recommendation_visits(self, months: int, tz_offset_minutes: int,
+                              now: datetime | None = None) -> RecommendationVisitsReport:
+        """BQ9 (tipo 3): de los usuarios que abrieron restaurantes recomendados por compatibilidad, % que fue a uno.
+
+        Por mes calendario (hora local) y en toda la ventana. Devuelve los `months` meses hasta el actual,
+        incluidos los que no tuvieron actividad (en 0), y los 5 restaurantes recomendados con mas visitas.
+        """
+        now = now or datetime.now(timezone.utc)
+        local = now.astimezone(timezone.utc) + timedelta(minutes=tz_offset_minutes)
+        index = local.year * 12 + local.month - 1
+        window = [f"{i // 12:04d}-{i % 12 + 1:02d}" for i in range(index - months + 1, index + 1)]
+        monthly = {r["month"]: r for r in self.repo.recommendation_visits(tz_offset_minutes, window[0], window[-1],
+                                                                         by_month=True)}
+        overall = self.repo.recommendation_visits(tz_offset_minutes, window[0], window[-1], by_month=False)
+        top = self.repo.top_recommended_visits(tz_offset_minutes, window[0], window[-1])
+        return RecommendationVisitsReport(
+            **_visit_stats(overall[0] if overall else None).model_dump(),
+            question=Q_RECOMMENDATION_VISITS,
+            months=months,
+            tz_offset_minutes=tz_offset_minutes,
+            top_visited_spots=[VisitedSpot(spot_id=r["spot_id"], name=r["name"], emoji=r["emoji"], visits=r["visits"])
+                               for r in top],
+            by_month=[MonthlyRecommendationVisits(month=m, **_visit_stats(monthly.get(m)).model_dump())
+                      for m in window],
         )

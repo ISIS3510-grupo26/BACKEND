@@ -5,10 +5,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.db import connect, init_db
 from app.repositories.spots_repository import SpotsRepository
-from app.routers import analytics, auth, best_for_you, spots, telemetry, users
+from app.routers import analytics, auth, best_for_you, matches, spots, telemetry, users
 
 
 @asynccontextmanager
@@ -33,6 +34,12 @@ app.include_router(telemetry.router)
 app.include_router(analytics.router)
 app.include_router(users.router)
 app.include_router(best_for_you.router)
+app.include_router(matches.router)
+
+# Fotos de restaurantes y platos. image_url viene relativo a la URL del backend (p. ej. "fotos/nitro-coffee.jpg"):
+# los fronts lo pegan a su API_BASE_URL. Se sirven desde aqui y no desde un sitio externo para que funcionen
+# en la red local de la demo y no dependan de otro servidor. Fuente de las fotos: TheMealDB / TheCocktailDB.
+app.mount("/fotos", StaticFiles(directory=Path(__file__).parent / "static" / "fotos"), name="fotos")
 
 
 @app.get("/health", tags=["health"])

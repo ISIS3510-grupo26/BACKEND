@@ -46,6 +46,18 @@ def test_list_and_detail_spots(client):
     assert client.get("/api/v1/spots/nope").status_code == 404
 
 
+def test_spots_and_menu_have_images(client):
+    # Cada restaurante y cada plato traen su foto, y el backend la sirve. La app la guarda en su cache de imagenes.
+    spots = client.get("/api/v1/spots").json()
+    assert all(s["imageUrl"].startswith("fotos/") for s in spots)
+    detail = client.get("/api/v1/spots/poodle-pizza-slices").json()
+    assert all(item["imageUrl"].startswith("fotos/") for item in detail["menu"])
+
+    foto = client.get("/" + detail["menu"][0]["imageUrl"])
+    assert foto.status_code == 200
+    assert foto.headers["content-type"] == "image/jpeg"
+
+
 def test_ingest_is_idempotent(client):
     e = event(1000)
     r1 = client.post("/api/v1/telemetry/page-loads", json={"events": [e]})
@@ -670,6 +682,6 @@ def test_dashboard_page(client):
     r = client.get("/dashboard")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
     for endpoint in ("slow-page-loads", "failed-requests", "monthly-active-favoriters", "rating-usage",
-                     "searches-by-weekday", "map-display-issues"):
+                     "searches-by-weekday", "map-display-issues", "recommendation-visits"):
         assert f"/api/v1/analytics/{endpoint}" in r.text
     assert "cdnjs.cloudflare.com" in r.text

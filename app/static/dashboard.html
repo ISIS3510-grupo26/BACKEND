@@ -129,6 +129,29 @@
       }),
     },
     {
+      // BQ4 (tipo 2): ultimo tiempo de espera reportado por restaurante. Un reporte de mas de 2 h sale gris.
+      bq: 'BQ4', author: 'Tomas Diaz', endpoint: '/api/v1/spots/wait-times/latest?freshMinutes=120',
+      wide: true,
+      render: r => {
+        const conReporte = r.spots.filter(s => s.minutes !== null);
+        const recientes = conReporte.filter(s => s.isRecent);
+        const hace = m => (m < 60 ? `${m} min ago` : m < 1440 ? `${Math.floor(m / 60)} h ago` : `${Math.floor(m / 1440)} d ago`);
+        return {
+          key: `${recientes.length} / ${r.spots.length}`,
+          label: `restaurants have a wait report from the last ${r.freshMinutes / 60} h ` +
+            `(${conReporte.length} have at least one report)`,
+          months: conReporte.map(s => ({
+            month: `${s.emoji} ${s.name}`,
+            value: `${s.minutes} min · ${hace(s.minutesAgo)}${s.isRecent ? '' : ' (outdated)'}`,
+          })),
+          chart: {
+            type: 'bar', label: 'Last reported wait (min)',
+            labels: conReporte.map(s => s.name), values: conReporte.map(s => s.minutes),
+          },
+        };
+      },
+    },
+    {
       bq: 'BQ6', author: 'Lucas Galindo', endpoint: '/api/v1/recommendations/best-for-you?freshMinutes=120&limit=5',
       render: r => {
         const top = r.spots[0];
@@ -147,6 +170,22 @@
         label: `active users added favorites in ${last(r.byMonth).month}`,
         chart: { type: 'line', label: 'Active favoriters', labels: r.byMonth.map(m => m.month), values: r.byMonth.map(m => m.activeFavoriters) },
       }),
+    },
+    {
+      // BQ9 (tipo 3): de los usuarios que abrieron recomendaciones por compatibilidad, % que llego al restaurante.
+      bq: 'BQ9', author: 'Esteban Alvarado', endpoint: '/api/v1/analytics/recommendation-visits?months=6',
+      mine: true,
+      render: r => {
+        const m = last(r.byMonth);
+        const top = r.topVisitedSpots[0];
+        return {
+          key: pct(m.visitRatePercentage),
+          label: `${m.usersVisited} of ${m.usersRecommended} students who opened a recommendation went there in ${m.month}` +
+            (top ? ` · most visited: ${top.emoji || ''} ${top.name || top.spotId}` : ''),
+          months: r.byMonth.map(x => ({ month: x.month, value: `${x.visits} visits / ${x.recommendationOpens} opens` })),
+          chart: { type: 'line', label: '% of students who visited', labels: r.byMonth.map(x => x.month), values: r.byMonth.map(x => x.visitRatePercentage) },
+        };
+      },
     },
     {
       bq: 'BQ10', author: 'Gabriela Perdomo', endpoint: '/api/v1/analytics/rating-usage?months=6',
@@ -171,6 +210,24 @@
           chart: { type: 'bar', label: 'Searches', labels: r.byDay.map(d => d.dayName.slice(0, 3)), values: r.byDay.map(d => d.searches) },
         };
       },
+    },
+        {
+      bq: 'BQ13', author: 'Gabriela Perdomo', endpoint: '/api/v1/analytics/review-crashes?months=3&maxCrashPercentage=5',
+      wide: true,
+      render: r => ({
+        recommendation: r.recommendation === 'fix_crashes' ? 'fix crashes' : 'keep',
+        tone: r.recommendation === 'fix_crashes' ? 'improve' : 'keep',
+        advice: r.recommendation === 'fix_crashes'
+          ? `${r.crashPercentage}% of the attempts end with the app closing (limit ${r.maxCrashPercentage}%): fix the crash first.`
+          : (r.priorities.length
+            ? `Crashes are under control. Next change to prioritize: ${r.priorities[0].change.toLowerCase()}.`
+            : 'No failed review submissions in this period.'),
+        key: pct(r.crashImpactPercentage),
+        label: `of the reviews students tried to publish were lost by a crash (${r.lostToCrashes} lost, ` +
+          `${r.reviewsPublished} published, ${r.crashes} crashes in ${r.attempts} attempts)`,
+        months: r.byMonth.map(m => ({ month: m.month, value: `${m.crashes} crashes / ${m.reviewsPublished} reviews` })),
+        chart: { type: 'bar', label: 'Failed attempts', labels: r.priorities.map(p => p.issue), values: r.priorities.map(p => p.failures) },
+      }),
     },
     {
       bq: 'BQ14', author: 'Esteban Alvarado', endpoint: '/api/v1/analytics/map-display-issues?months=3&maxIssuePercentage=10',
@@ -244,10 +301,11 @@
 
       const nodes = [];
       if (view.recommendation) {
-        nodes.push(el('div', `recommendation ${view.recommendation}`, view.recommendation.toUpperCase()));
-        nodes.push(el('div', 'key-label', view.recommendation === 'improve'
+        // tone y advice son opcionales, si la tarjeta no los trae se usan los textos de la BQ14.
+        nodes.push(el('div', `recommendation ${view.tone || view.recommendation}`, view.recommendation.toUpperCase()));
+        nodes.push(el('div', 'key-label', view.advice || (view.recommendation === 'improve'
           ? 'The map shows too many wrong or missing locations: improve or change it.'
-          : 'The map works well enough: keep it.'));
+          : 'The map works well enough: keep it.')));
       }
       nodes.push(el('div', 'key', String(view.key)), el('div', 'key-label', view.label));
       if (view.months) {

@@ -82,6 +82,7 @@ class MenuItemOut(ApiModel):
     description: str
     price: str
     is_student_pick: bool
+    image_url: str | None = None   # foto del plato, relativa a la URL del backend ("fotos/....jpg")
 
 
 class ReviewOut(ApiModel):
@@ -116,7 +117,8 @@ class SpotSummaryOut(ApiModel):
     total_reviews: int
     latitude: float | None = None   # WGS84; con esto el mapa del front pone cada pin en su sitio
     longitude: float | None = None
-    
+    image_url: str | None = None    # foto del restaurante, relativa a la URL del backend; si falta, el front usa el emoji
+
     @field_validator("rating")
     @classmethod
     def one_decimal(cls, v: float) -> float:
@@ -152,6 +154,37 @@ class ReviewCreatedOut(ApiModel):
         return round(v, 1)
     
 
+# ---------- Preferencias del usuario (Taste Profile y Dietary Preferences) ----------
+
+class PreferencesIn(ApiModel):
+    main_cuisine: str | None = Field(default=None, max_length=64)
+    meal_style: str | None = Field(default=None, max_length=64)
+    flavors: list[str] = Field(default_factory=list, max_length=20)
+    interests: list[str] = Field(default_factory=list, max_length=20)
+    diet: str = Field(default="No specific diet", max_length=64)
+    avoid: list[str] = Field(default_factory=list, max_length=20)
+    allergies: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("flavors", "interests", "avoid", "allergies")
+    @classmethod
+    def short_unique_items(cls, v: list[str]) -> list[str]:
+        if any(len(item) > 64 for item in v):
+            raise ValueError("each option must be at most 64 characters")
+        return list(dict.fromkeys(v))  # sin repetidos, conservando el orden
+
+
+class PreferencesOut(PreferencesIn):
+    saved: bool  # False = el usuario todavia no ha guardado nada; son los valores por defecto
+
+
+# ---------- Smart feature G: compatibilidad de cada restaurante para el usuario ----------
+
+class SpotMatchOut(ApiModel):
+    spot_id: str
+    compatibility: int                   # 0-100, calculado para este usuario
+    dietary_conflict: str | None = None  # p. ej. "No vegetarian options": no se le recomienda
+    
+    
 # ---------- Favoritos (BQ5) ----------
 
 class NearbyFavoriteOut(ApiModel):
@@ -407,3 +440,70 @@ class MapDisplayIssuesReport(MapDisplayStats):
     max_issue_percentage: float
     recommendation: Literal["improve", "keep"]  # improve si issue_percentage (de toda la ventana) > max_issue_percentage
     by_month: list[MonthlyMapDisplay]  # un elemento por mes de la ventana, del mas antiguo al actual (0 si no hubo)
+
+
+
+# ---------- BQ13: crashes al publicar una reseña ----------
+
+class ReviewCrashStats(ApiModel):
+    attempts: int                    # intentos de publicar una reseña (eventos review_submit, uno por intento)
+    published: int                   # intentos que la app vio terminar bien (201)
+    crashes: int                     # la app se cerró mientras enviaba (la app lo reporta al volver a abrirse)
+    crash_percentage: float          # crashes / attempts * 100, 1 decimal
+    saved_despite_crash: int         # crashes cuya reseña si quedó en la tabla reviews (el servidor alcanzó a guardarla)
+    lost_to_crashes: int             # crashes sin reseña guardada: reseñas que el estudiante no pudo publicar
+    failures_by_type: dict[str, int]  # error_type -> intentos fallidos (incluye crash), de mayor a menor
+
+
+class MonthlyReviewCrashes(ReviewCrashStats):
+    month: str                       # 'YYYY-MM' en hora local del campus
+    reviews_published: int           # reseñas de usuarios guardadas en la tabla reviews ese mes (fuente de verdad)
+
+
+class ReviewPriority(ApiModel):
+    issue: str                       # error_type
+    failures: int
+    share_percentage: float          # % de todos los intentos fallidos
+    change: str                      # que cambiar en la feature de reseñas
+
+
+class ReviewCrashesReport(ReviewCrashStats):
+    question: str
+    months: int
+    tz_offset_minutes: int
+    max_crash_percentage: float
+    reviews_published: int           # reseñas guardadas en toda la ventana (tabla reviews)
+    crash_impact_percentage: float   # lost_to_crashes / (reviews_published + lost_to_crashes) * 100
+    recommendation: Literal["fix_crashes", "keep"]  # fix_crashes si crash_percentage > max_crash_percentage
+    priorities: list[ReviewPriority]  # cambios a priorizar, del problema mas frecuente al menos frecuente
+    by_month: list[MonthlyReviewCrashes]  # un elemento por mes de la ventana, del mas antiguo al actual
+
+
+# ---------- BQ9: visitas a restaurantes recomendados por compatibilidad ----------
+
+class RecommendationVisitStats(ApiModel):
+    users_recommended: int            # usuarios distintos que abrieron al menos un restaurante recomendado
+    users_visited: int                # de ellos, cuantos llegaron a uno de esos restaurantes
+    visit_rate_percentage: float      # users_visited / users_recommended * 100, 1 decimal (la BQ9)
+    recommendation_opens: int         # eventos recommendation_open
+    visits: int                       # eventos recommendation_visit
+    opens_to_visits_percentage: float  # visits / recommendation_opens * 100, 1 decimal
+
+
+class MonthlyRecommendationVisits(RecommendationVisitStats):
+    month: str                        # 'YYYY-MM' en hora local del campus
+
+
+class VisitedSpot(ApiModel):
+    spot_id: str
+    name: str | None
+    emoji: str | None
+    visits: int
+
+
+class RecommendationVisitsReport(RecommendationVisitStats):
+    question: str
+    months: int
+    tz_offset_minutes: int
+    top_visited_spots: list[VisitedSpot]          # restaurantes recomendados a los que mas se llego, maximo 5
+    by_month: list[MonthlyRecommendationVisits]   # un elemento por mes de la ventana, del mas antiguo al actual
