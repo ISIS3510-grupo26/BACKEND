@@ -12,6 +12,7 @@ Sirve el catálogo de restaurantes y recibe la telemetría con la que se respond
 | BQ5 | Which restaurants in the user's favorites are open now and within a 15-minute walk? | `GET /api/v1/users/{userId}/favorites/nearby?lat=&lng=&maxWalkMinutes=15` |
 | BQ6 | Which restaurants have the shortest waiting time and the best match with my taste profile? | `GET /api/v1/recommendations/best-for-you?freshMinutes=120` |
 | BQ7 | How many active users add one or more restaurants to their favorites each month? | `GET /api/v1/analytics/monthly-active-favoriters` |
+| BQ8 | At what time of the day is the reported waiting time at each restaurant the shortest? | `GET /api/v1/analytics/best-time-to-go?days=28&minReports=2` |
 | BQ9 | What is the rate of users that visit restaurants based on the app's compatibility recommendations each month? | `GET /api/v1/analytics/recommendation-visits?months=6` |
 | BQ10 | What percentage of users use the restaurant rating feature when looking at a restaurant's page? | `GET /api/v1/analytics/rating-usage?months=6` |
 | BQ13 | How does the number of app crashes during the restaurant review submission affect the number of reviews successfully published and what changes to the review submission feature should be prioritized based on this information? | `GET /api/v1/analytics/review-crashes?months=3&maxCrashPercentage=5` |
@@ -101,6 +102,7 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | GET | `/api/v1/analytics/failed-requests` | BQ2 |
 | GET | `/api/v1/analytics/spot-views-by-hour` | BQ3 (vistas + búsquedas por restaurante en cada hora) |
 | GET | `/api/v1/analytics/monthly-active-favoriters` | BQ7 (usuarios distintos que agregan favoritos, por mes) |
+| GET | `/api/v1/analytics/best-time-to-go` | BQ8 (espera promedio por hora local en cada restaurante, con la mejor y la peor hora; usa los reportes de la BQ4) |
 | GET | `/api/v1/analytics/rating-usage` | BQ10 (de los usuarios que vieron páginas de restaurantes en el mes, % que calificó) |
 | GET | `/api/v1/analytics/recommendation-visits` | BQ9 (de los usuarios que abrieron recomendaciones por compatibilidad, % que llegó a uno de esos restaurantes, por mes) |
 | GET | `/api/v1/analytics/map-display-issues` | BQ14 (cargas del mapa con problemas, por tipo y por mes, y si conviene mejorar el mapa) |
@@ -312,7 +314,7 @@ Una sola página con **todas** las business questions del equipo, leída de la m
 endpoints `/api/v1/analytics/...` (no consulta la base directamente). Con el backend corriendo, abrir
 **http://localhost:8000/dashboard** en el navegador.
 
-- Una tarjeta por BQ: BQ1 y BQ2 (Tomas Diaz), BQ6 (Lucas Galindo), BQ7 (Camilo Linares), BQ10 (Gabriela Perdomo), BQ11 (Lucas Galindo),
+- Una tarjeta por BQ: BQ1, BQ2, BQ4 y BQ8 (Tomas Diaz), BQ6 (Lucas Galindo), BQ7 (Camilo Linares), BQ10 (Gabriela Perdomo), BQ11 (Lucas Galindo),
   BQ12 (Alejandro Vides), BQ9 y BQ14 (Esteban Alvarado), con la pregunta, el número clave y un gráfico simple. La BQ14
   muestra los problemas por tipo, el % de cada mes y la recomendación (`IMPROVE` / `KEEP`) en grande.
 - Botón **Refresh** y actualización automática cada 30 s. Si un endpoint falla, solo su tarjeta muestra el error.
@@ -396,3 +398,16 @@ Ejemplo, BQ3:
 | Táctica **security** | Validación de entrada (Pydantic), SQL parametrizado, HTTP plano solo en debug | `schemas.py`, repositorios, `build.gradle.kts` |
 | Táctica **security – autenticación** | Email + contraseña (bcrypt) → JWT Bearer de 7 días; el `userId` sale del token y no se puede actuar a nombre de una cuenta registrada sin su token | `auth_service.py`, `security.py` (`optional_user_id`, `resolve_acting_user`) |
 | Táctica **interoperability** | Contrato JSON versionado (`/api/v1`), camelCase, CORS abierto para el otro front | `schemas.py`, `main.py` |
+
+## BQ8 · Best time to go (Sprint 4, Tomas Diaz)
+
+**Tipo 2.** "At what time of the day is the reported waiting time at each restaurant the shortest?"
+Reutiliza los reportes de espera de la BQ4 (`wait_time_reports`): cada reporte cae en la hora local en que el
+estudiante lo hizo (`reported_at + tzOffsetMinutes`). Por restaurante devuelve la espera promedio de cada hora,
+la mejor hora (menor promedio) y la peor; `byHour` de la raiz es todo el campus junto. Una hora con menos de
+`minReports` reportes se lista pero no puede ser la mejor ni la peor. Parametros: `days` (1-180, por defecto 28),
+`tzOffsetMinutes` (por defecto -300) y `minReports` (por defecto 1; la app y el dashboard usan 2).
+
+Datos de prueba: `python scripts/simulate_wait_reports.py --n 250` manda reportes con `platform=simulator`
+repartidos en los ultimos 21 dias, con un pico distinto por restaurante.
+
