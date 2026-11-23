@@ -385,6 +385,36 @@ class LastWaitTimesReport(ApiModel):
     spots: list[LastWaitTime]  # todos los restaurantes, en el orden del catalogo
 
 
+# ---------- BQ8: mejor hora para ir a cada restaurante (Sprint 4, Tomas) ----------
+
+class HourlyWait(ApiModel):
+    hour: int                  # hora local 0-23
+    avg_minutes: float         # espera promedio reportada en esa hora
+    reports: int
+
+
+class BestTimeSpot(ApiModel):
+    spot_id: str
+    name: str
+    emoji: str
+    reports: int               # reportes del restaurante en la ventana
+    best_hour: int | None      # hora con menor espera promedio (None si no hay reportes)
+    best_hour_avg_minutes: float | None
+    worst_hour: int | None     # hora con mayor espera promedio
+    worst_hour_avg_minutes: float | None
+    by_hour: list[HourlyWait]  # solo las horas con reportes, de 0 a 23
+
+
+class BestTimeToGoReport(ApiModel):
+    question: str
+    days: int
+    tz_offset_minutes: int
+    min_reports: int
+    total_reports: int
+    by_hour: list[HourlyWait]  # todos los restaurantes juntos: que hora del dia es mas tranquila en el campus
+    spots: list[BestTimeSpot]  # todos los restaurantes, en el orden del catalogo
+
+
 # ---------- BQ6: menor tiempo de espera y mayor compatibilidad con el perfil de gusto ----------
 
 class BestForYouSpot(ApiModel):

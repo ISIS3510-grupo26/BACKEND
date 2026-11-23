@@ -152,6 +152,30 @@
       },
     },
     {
+      // BQ8 (tipo 2, Sprint 4): hora del dia con la menor espera reportada en cada restaurante (datos de la BQ4).
+      bq: 'BQ8', author: 'Tomas Diaz', endpoint: '/api/v1/analytics/best-time-to-go?days=28&minReports=2',
+      wide: true,
+      render: r => {
+        const hora = h => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'am' : 'pm'}`;
+        const calma = r.byHour.reduce((a, b) => (a === null || b.avgMinutes < a.avgMinutes ? b : a), null);
+        const conDato = r.spots.filter(s => s.bestHour !== null);
+        return {
+          key: calma ? hora(calma.hour) : '—',
+          label: calma
+            ? `is the calmest hour on campus (${calma.avgMinutes} min average wait) · ${r.totalReports} reports in the last ${r.days} days`
+            : `no wait reports in the last ${r.days} days`,
+          months: conDato.map(s => ({
+            month: `${s.emoji} ${s.name}`,
+            value: `best ${hora(s.bestHour)} (${s.bestHourAvgMinutes} min) · avoid ${hora(s.worstHour)} (${s.worstHourAvgMinutes} min)`,
+          })),
+          chart: {
+            type: 'bar', label: 'Average reported wait (min)',
+            labels: r.byHour.map(h => hora(h.hour)), values: r.byHour.map(h => h.avgMinutes),
+          },
+        };
+      },
+    },
+    {
       bq: 'BQ6', author: 'Lucas Galindo', endpoint: '/api/v1/recommendations/best-for-you?freshMinutes=120&limit=5',
       render: r => {
         const top = r.spots[0];

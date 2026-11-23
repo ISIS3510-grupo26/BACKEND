@@ -7,10 +7,12 @@ from fastapi import APIRouter, Depends, Query
 from app.config import settings
 from app.db import get_conn
 from app.repositories.telemetry_repository import TelemetryRepository
-from app.schemas import (FailedRequestsReport, MapDisplayIssuesReport, MonthlyActiveFavoritersReport, RatingUsageReport,
+from app.schemas import (BestTimeToGoReport, FailedRequestsReport, MapDisplayIssuesReport, MonthlyActiveFavoritersReport, RatingUsageReport,
                          RecommendationVisitsReport, ReviewCrashesReport, SlowLoadsReport, SpotViewsByHourReport,
                          SearchesByWeekdayReport)
+from app.routers.spots import current_time
 from app.services.analytics_service import AnalyticsService
+from app.services.wait_times_service import WaitTimesService
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
@@ -124,3 +126,16 @@ def recommendation_visits(
 ):
     """BQ9 (tipo 3): tasa de usuarios que visitan los restaurantes que la app les recomienda por compatibilidad."""
     return service.recommendation_visits(months=months, tz_offset_minutes=tz_offset_minutes)
+
+
+@router.get("/best-time-to-go", response_model=BestTimeToGoReport)
+def best_time_to_go(
+    days: int = Query(28, ge=1, le=180, description="Ventana de dias hacia atras"),
+    tz_offset_minutes: int = Query(settings.campus_tz_offset_minutes, alias="tzOffsetMinutes", ge=-840, le=840),
+    min_reports: int = Query(1, alias="minReports", ge=1, le=50,
+                             description="Reportes minimos para que una hora cuente como mejor o peor"),
+    now: datetime = Depends(current_time),
+    conn: sqlite3.Connection = Depends(get_conn),
+):
+    """BQ8 (tipo 2): hora del dia con la menor espera reportada en cada restaurante (datos de la BQ4)."""
+    return WaitTimesService(conn).best_time_to_go(days, tz_offset_minutes, min_reports, now=now)
