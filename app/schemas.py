@@ -107,6 +107,10 @@ class ReviewPageOut(ApiModel):
     total: int                         # reseñas que cumplen el filtro (todas las paginas)
 
 
+class HelpfulVotesOut(ApiModel):
+    review_ids: list[int]  # reseñas de un restaurante que el usuario marco como Helpful
+
+
 class SpotSummaryOut(ApiModel):
     id: str
     emoji: str

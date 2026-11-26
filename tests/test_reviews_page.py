@@ -128,3 +128,40 @@ def test_votes_on_catalog_reviews_survive_a_restart(client):
 
     after = page(client)["items"][0]
     assert (after["id"], after["helpfulCount"]) == (catalog["id"], catalog["helpfulCount"] + 1)
+
+
+def my_votes(client, spot=SPOT, **kwargs):
+    return client.get(f"/api/v1/spots/{spot}/reviews/helpful", **kwargs)
+
+
+def test_my_helpful_votes_follow_put_and_delete(client, reviewed):
+    review_ids = [item["id"] for item in page(client, pageSize=50)["items"]]
+    url = f"{REVIEWS}/{review_ids[0]}/helpful"
+    me = {"headers": bearer(reviewed[1])}
+
+    assert my_votes(client, **me).json() == {"reviewIds": []}
+
+    client.put(url, **me)
+    client.put(f"{REVIEWS}/{review_ids[2]}/helpful", **me)
+    client.put(url, params={"userId": "dev-ana"})  # el voto de otra persona no aparece
+    assert my_votes(client, **me).json() == {"reviewIds": sorted([review_ids[0], review_ids[2]])}
+
+    client.delete(url, **me)
+    assert my_votes(client, **me).json() == {"reviewIds": [review_ids[2]]}
+
+
+def test_repeated_put_lists_the_vote_once(client, reviewed):
+    review_id = page(client)["items"][0]["id"]
+    for _ in range(2):
+        client.put(f"{REVIEWS}/{review_id}/helpful", params={"userId": "dev-ana"})
+
+    assert my_votes(client, params={"userId": "dev-ana"}).json() == {"reviewIds": [review_id]}
+
+
+def test_my_votes_are_per_spot_and_need_a_user(client, reviewed):
+    review_id = page(client)["items"][0]["id"]
+    client.put(f"{REVIEWS}/{review_id}/helpful", params={"userId": "dev-ana"})
+
+    assert my_votes(client, spot="nitro-coffee", params={"userId": "dev-ana"}).json() == {"reviewIds": []}
+    assert my_votes(client, spot="nope", params={"userId": "dev-ana"}).status_code == 404
+    assert my_votes(client).status_code == 401

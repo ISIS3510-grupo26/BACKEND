@@ -72,3 +72,12 @@ class ReviewsRepository:
             return False
         self.conn.execute("UPDATE reviews SET helpful_count = MAX(helpful_count - 1, 0) WHERE id = ?", (review_id,))
         return True
+
+    def helpful_ids(self, user_id: str, spot_id: str) -> list[int]:
+        """Ids de las reseñas de spot_id que user_id marco como Helpful."""
+        rows = self.conn.execute(
+            "SELECT v.review_id FROM review_helpful_votes v JOIN reviews r ON r.id = v.review_id "
+            "WHERE v.user_id = ? AND r.spot_id = ? ORDER BY v.review_id",
+            (user_id, spot_id),
+        ).fetchall()
+        return [row[0] for row in rows]

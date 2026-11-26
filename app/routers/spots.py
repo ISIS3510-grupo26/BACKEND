@@ -11,8 +11,8 @@ from app.config import settings
 from app.db import get_conn
 from app.repositories.spots_repository import SpotsRepository
 from app.repositories.users_repository import UsersRepository
-from app.schemas import (LastWaitTimesReport, ReviewCreatedOut, ReviewIn, ReviewPageOut, SpotDetailOut,
-                         SpotSummaryOut, WaitTimeReportIn, WaitTimeReportOut)
+from app.schemas import (HelpfulVotesOut, LastWaitTimesReport, ReviewCreatedOut, ReviewIn, ReviewPageOut,
+                         SpotDetailOut, SpotSummaryOut, WaitTimeReportIn, WaitTimeReportOut)
 from app.security import get_users_repo, optional_user_id, require_user_id, resolve_acting_user, unauthorized
 from app.services.reviews_service import AlreadyReviewed, ReviewNotFound, ReviewsService, SpotNotFound
 from app.services import wait_times_service
@@ -108,6 +108,16 @@ def _set_helpful(conn: sqlite3.Connection, spot_id: str, review_id: int, user_id
     except ReviewNotFound:
         raise HTTPException(status_code=404, detail=f"Review {review_id} not found in spot '{spot_id}'")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{spot_id}/reviews/helpful", response_model=HelpfulVotesOut)
+def my_helpful_votes(spot_id: str, user_id: str = Depends(helpful_voter),
+                     conn: sqlite3.Connection = Depends(get_conn)):
+    """Las reseñas de este restaurante que el usuario marco como Helpful. Sin usuario, 401 como PUT/DELETE."""
+    try:
+        return ReviewsService(conn).helpful_votes(spot_id, user_id)
+    except SpotNotFound:
+        raise HTTPException(status_code=404, detail=f"Spot '{spot_id}' not found")
 
 
 @router.put("/{spot_id}/reviews/{review_id}/helpful", status_code=status.HTTP_204_NO_CONTENT)

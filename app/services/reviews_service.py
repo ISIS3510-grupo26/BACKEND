@@ -2,7 +2,7 @@
 una sola transaccion."""
 import sqlite3
 from datetime import datetime, timezone
-from app.schemas import ReviewCreatedOut, ReviewItemOut, ReviewPageOut
+from app.schemas import HelpfulVotesOut, ReviewCreatedOut, ReviewItemOut, ReviewPageOut
 from app.unit_of_work import UnitOfWork
 
 
@@ -60,3 +60,10 @@ class ReviewsService:
                 uow.reviews.add_helpful(user_id, review_id)
             else:
                 uow.reviews.remove_helpful(user_id, review_id)
+
+    def helpful_votes(self, spot_id: str, user_id: str) -> HelpfulVotesOut:
+        """Las reseñas de un restaurante que el usuario marco como Helpful, para pintar el boton marcado."""
+        uow = UnitOfWork(self.conn)
+        if not uow.spots.exists(spot_id):
+            raise SpotNotFound(spot_id)
+        return HelpfulVotesOut(review_ids=uow.reviews.helpful_ids(user_id, spot_id))
