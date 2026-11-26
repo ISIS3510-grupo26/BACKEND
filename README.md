@@ -13,9 +13,11 @@ Sirve el catálogo de restaurantes y recibe la telemetría con la que se respond
 | BQ6 | Which restaurants have the shortest waiting time and the best match with my taste profile? | `GET /api/v1/recommendations/best-for-you?freshMinutes=120` |
 | BQ7 | How many active users add one or more restaurants to their favorites each month? | `GET /api/v1/analytics/monthly-active-favoriters` |
 | BQ8 | What percentage of restaurant page visits include an interaction with the comments each month? | `GET /api/v1/analytics/review-interactions?months=6` |
+| BQ9 | What is the rate of users that visit restaurants based on the app's compatibility recommendations each month? | `GET /api/v1/analytics/recommendation-visits?months=6` |
 | BQ10 | What percentage of users use the restaurant rating feature when looking at a restaurant's page? | `GET /api/v1/analytics/rating-usage?months=6` |
 | BQ13 | How does the number of app crashes during the restaurant review submission affect the number of reviews successfully published and what changes to the review submission feature should be prioritized based on this information? | `GET /api/v1/analytics/review-crashes?months=3&maxCrashPercentage=5` |
 | BQ14 | How many times does the app display the restaurant's location incorrectly on the map or not at all, and should the map feature be improved or changed based on this? | `GET /api/v1/analytics/map-display-issues?months=3&maxIssuePercentage=10` |
+| BQ15 | At what time of the day is the reported waiting time at each restaurant the shortest? | `GET /api/v1/analytics/best-time-to-go?days=28&minReports=2` |
 
 > **Nota de numeración:** hay dos preguntas marcadas BQ3, la de vistas por hora (telemetría) y la de
 > recomendaciones cercanas (feature de la *Taste Map*). Falta confirmar con el equipo cuál conserva el número.
@@ -47,6 +49,11 @@ la ubicación de los restaurantes o la muestra mal, y recomienda mejorar o mante
 calendario hacia atrás incluido el actual, por defecto 3, máx. 36), `tzOffsetMinutes` y `maxIssuePercentage`
 (por defecto 10, de 0 a 100): si el porcentaje de problemas de toda la ventana lo supera, `recommendation` es
 `improve`; si no, `keep`. Todos los datos para la BQ14 salen de la tabla `page_load_events`; no hay tabla nueva.
+
+BQ9 es de **tipo 3** (uso de una feature): de los estudiantes que abrieron un restaurante desde una recomendación
+por compatibilidad (*Best for you right now* o el feed de *For You* ordenado por su match), cuántos llegaron a uno
+de esos restaurantes. Acepta `months` (por defecto 6, máx. 36) y `tzOffsetMinutes`. Sale de los eventos
+`recommendation_open` y `recommendation_visit` de `page_load_events`; no hay tabla nueva.
 
 BQ6 es de **tipo 2** y alimenta la sección **"Best for you right now"** del feed *For You* en la app Kotlin, que
 reemplaza el porcentaje de *Taste Match* que antes venía escrito a mano en el catálogo. Junta dos cosas: el último
@@ -93,13 +100,16 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | POST | `/api/v1/spots/{id}/reviews` | Publicar calificación con token (`stars` 1–5, `text` opcional). Guarda la reseña y actualiza el promedio en una sola transacción (Unit of Work). `409` si el usuario ya calificó ese restaurante |
 | GET | `/api/v1/spots/{id}/reviews` | Todas las reseñas paginadas ("All reviews"): `sort` = `newest`·`highest`·`lowest`·`helpful`, `stars` 1–5, `q` (texto o autor, sin distinguir mayúsculas), `page`, `pageSize` (máx. 50). Devuelve `{items, page, pageSize, total}`; cada item trae `id` y `helpfulCount`. `404` si el restaurante no existe |
 | PUT / DELETE | `/api/v1/spots/{id}/reviews/{reviewId}/helpful` | Marcar / quitar Helpful. El usuario sale del token (sin token, `?userId=` de desarrollo, como en favoritos). Idempotente: repetirlo responde `204` sin cambiar el contador. `404` si la reseña no es de ese restaurante |
-| POST | `/api/v1/telemetry/page-loads` | Lote de eventos (1–500), idempotente por `eventId`. `screen` = `restaurant_detail` (vista de página), `search` (elegido desde el buscador) o `favorite_added` (guardó el restaurante; exige `userId` y `spotId`) |
+| GET | `/api/v1/spots/{id}/reviews/helpful` | Reseñas de ese restaurante que el usuario marcó como Helpful: `{"reviewIds": [...]}`. Mismo usuario que PUT/DELETE (token o `?userId=`). `404` si el restaurante no existe |
+| POST | `/api/v1/telemetry/page-loads` | Lote de eventos (1–500), idempotente por `eventId`. `screen` = `restaurant_detail` (vista de página), `search` (elegido desde el buscador), `favorite_added` (guardó el restaurante; exige `userId` y `spotId`), `recommendation_open` (lo abrió desde una recomendación por compatibilidad), `recommendation_visit` (llegó a ese restaurante) o `review_interaction` (usó las reseñas durante una visita, BQ8); estos tres últimos exigen `spotId` |
 | GET | `/api/v1/analytics/slow-page-loads` | BQ1 |
 | GET | `/api/v1/analytics/failed-requests` | BQ2 |
 | GET | `/api/v1/analytics/spot-views-by-hour` | BQ3 (vistas + búsquedas por restaurante en cada hora) |
 | GET | `/api/v1/analytics/monthly-active-favoriters` | BQ7 (usuarios distintos que agregan favoritos, por mes) |
 | GET | `/api/v1/analytics/review-interactions` | BQ8 (% de visitas a un restaurante con al menos una interacción con las reseñas, por mes y por acción) |
+| GET | `/api/v1/analytics/best-time-to-go` | BQ15 (espera promedio por hora local en cada restaurante, con la mejor y la peor hora; usa los reportes de la BQ4) |
 | GET | `/api/v1/analytics/rating-usage` | BQ10 (de los usuarios que vieron páginas de restaurantes en el mes, % que calificó) |
+| GET | `/api/v1/analytics/recommendation-visits` | BQ9 (de los usuarios que abrieron recomendaciones por compatibilidad, % que llegó a uno de esos restaurantes, por mes) |
 | GET | `/api/v1/analytics/map-display-issues` | BQ14 (cargas del mapa con problemas, por tipo y por mes, y si conviene mejorar el mapa) |
 | GET | `/dashboard` | Dashboard del equipo con todas las BQ (HTML) |
 | GET | `/api/v1/users/{userId}/favorites` | Restaurantes guardados por el usuario (mismo formato que `/spots`) |
@@ -211,6 +221,15 @@ Contrato del evento de telemetría (cualquier front debe enviarlo igual):
   agrupa por mes calendario local, igual que la BQ7; los meses sin cargas salen en `0`. Las cargas que la app sirve
   desde su caché en memoria (LRU) no mandan evento. BQ1/BQ2/BQ3 ignoran estos eventos.
 
+- BQ9: la app Flutter manda `screen=recommendation_open` (con `spotId`) cuando el estudiante abre un restaurante
+  desde *Best for you right now* o desde el feed ordenado por su match, y `screen=recommendation_visit` cuando el
+  celular llega a 100 m o menos de ese restaurante en las 4 horas siguientes (revisa la ubicación solo con la app
+  abierta; la posición nunca se envía). El `eventId` de la visita es `visit-` + el de la apertura. *Usuarios
+  recomendados* = `userId` distintos con `recommendation_open` en el mes local; *usuarios que visitaron* = de esos,
+  los que tienen `recommendation_visit` ese mismo mes, así la tasa nunca pasa de 100. `visitRatePercentage` =
+  visitaron / recomendados × 100 y `opensToVisitsPercentage` = visitas / aperturas × 100, con 1 decimal.
+  `topVisitedSpots` son los 5 restaurantes recomendados con más visitas en la ventana.
+
 Evento de búsqueda (mismo endpoint y contrato):
 
 ```json
@@ -234,6 +253,22 @@ Ejemplo de respuesta de BQ7 (`?months=2`):
   "months": 2, "tzOffsetMinutes": -300,
   "byMonth": [ { "month": "2026-09", "activeFavoriters": 14, "favoriteEvents": 31 },
                { "month": "2026-10", "activeFavoriters": 3, "favoriteEvents": 5 } ] }
+```
+
+Ejemplo de respuesta de BQ9 (`?months=2`):
+
+```json
+{ "usersRecommended": 25, "usersVisited": 9, "visitRatePercentage": 36.0, "recommendationOpens": 61, "visits": 12,
+  "opensToVisitsPercentage": 19.7,
+  "question": "What is the rate of users that visit restaurants based on the app's compatibility recommendations each month?",
+  "months": 2, "tzOffsetMinutes": -300,
+  "topVisitedSpots": [ { "spotId": "green-bowl-co", "name": "Green Bowl Co.", "emoji": "🥗", "visits": 5 },
+                       { "spotId": "nitro-coffee", "name": "Nitro Coffee & Brew", "emoji": "☕", "visits": 4 } ],
+  "byMonth": [
+    { "usersRecommended": 11, "usersVisited": 3, "visitRatePercentage": 27.3, "recommendationOpens": 24, "visits": 4,
+      "opensToVisitsPercentage": 16.7, "month": "2026-10" },
+    { "usersRecommended": 16, "usersVisited": 6, "visitRatePercentage": 37.5, "recommendationOpens": 37, "visits": 8,
+      "opensToVisitsPercentage": 21.6, "month": "2026-11" } ] }
 ```
 
 Ejemplo de respuesta de BQ14 (`?months=2`):
@@ -290,8 +325,8 @@ Una sola página con **todas** las business questions del equipo, leída de la m
 endpoints `/api/v1/analytics/...` (no consulta la base directamente). Con el backend corriendo, abrir
 **http://localhost:8000/dashboard** en el navegador.
 
-- Una tarjeta por BQ: BQ1 y BQ2 (Tomas Diaz), BQ6 (Lucas Galindo), BQ7 (Camilo Linares), BQ10 (Gabriela Perdomo), BQ11 (Lucas Galindo),
-  BQ12 (Alejandro Vides) y BQ14 (Esteban Alvarado), con la pregunta, el número clave y un gráfico simple. La BQ14
+- Una tarjeta por BQ: BQ1, BQ2, BQ4 y BQ15 (Tomas Diaz), BQ6 (Lucas Galindo), BQ7 y BQ8 (Camilo Linares), BQ10 y BQ13
+  (Gabriela Perdomo), BQ11 (Lucas Galindo), BQ12 (Alejandro Vides), BQ9 y BQ14 (Esteban Alvarado), con la pregunta, el número clave y un gráfico simple. La BQ14
   muestra los problemas por tipo, el % de cada mes y la recomendación (`IMPROVE` / `KEEP`) en grande.
 - Botón **Refresh** y actualización automática cada 30 s. Si un endpoint falla, solo su tarjeta muestra el error.
 - La BQ11 todavía no tiene endpoint: su tarjeta dice "Endpoint not available yet". Cuando exista, basta con poner su
@@ -299,9 +334,10 @@ endpoints `/api/v1/analytics/...` (no consulta la base directamente). Con el bac
 - Es un solo archivo HTML + CSS + JavaScript (Chart.js desde cdnjs), sin build ni framework. Los datos sintéticos
   de `python scripts/simulate_telemetry.py` llenan BQ1, BQ2 y BQ12; las demás tarjetas se llenan usando la app.
 - Para la demo, `python scripts/seed_dashboard.py` (con el backend corriendo) llena **todas** las tarjetas con datos
-  sintéticos por la API (`platform=simulator`): cargas y búsquedas, tiempos de espera, favoritos de 12 meses, cuentas
-  `sim-reviewer-N@campusbites.dev` que ven restaurantes e intentan publicar reseñas, visitas con interacciones con las
-  reseñas (BQ8) y votos Helpful, y cargas del mapa. Las reseñas
+  sintéticos por la API (`platform=simulator`): cargas y búsquedas, tiempos de espera (de la última hora y de las
+  últimas 3 semanas, para la BQ15), favoritos de 12 meses, cuentas `sim-reviewer-N@campusbites.dev` que ven
+  restaurantes e intentan publicar reseñas, visitas con interacciones con las reseñas (BQ8) y votos Helpful,
+  aperturas y visitas desde recomendaciones (BQ9) y cargas del mapa. Las reseñas
   quedan con la fecha de hoy, así que en la BQ10 solo el mes actual tiene calificaciones. La BQ11 sigue vacía
   porque no tiene endpoint.
 
@@ -380,3 +416,16 @@ Ejemplo, BQ3:
 | Táctica **security** | Validación de entrada (Pydantic), SQL parametrizado, HTTP plano solo en debug | `schemas.py`, repositorios, `build.gradle.kts` |
 | Táctica **security – autenticación** | Email + contraseña (bcrypt) → JWT Bearer de 7 días; el `userId` sale del token y no se puede actuar a nombre de una cuenta registrada sin su token | `auth_service.py`, `security.py` (`optional_user_id`, `resolve_acting_user`) |
 | Táctica **interoperability** | Contrato JSON versionado (`/api/v1`), camelCase, CORS abierto para el otro front | `schemas.py`, `main.py` |
+
+## BQ15 · Best time to go (Sprint 4, Tomas Diaz)
+
+**Tipo 2.** "At what time of the day is the reported waiting time at each restaurant the shortest?"
+Reutiliza los reportes de espera de la BQ4 (`wait_time_reports`): cada reporte cae en la hora local en que el
+estudiante lo hizo (`reported_at + tzOffsetMinutes`). Por restaurante devuelve la espera promedio de cada hora,
+la mejor hora (menor promedio) y la peor; `byHour` de la raiz es todo el campus junto. Una hora con menos de
+`minReports` reportes se lista pero no puede ser la mejor ni la peor. Parametros: `days` (1-180, por defecto 28),
+`tzOffsetMinutes` (por defecto -300) y `minReports` (por defecto 1; la app y el dashboard usan 2).
+
+Datos de prueba: `python scripts/simulate_wait_reports.py --n 250` manda reportes con `platform=simulator`
+repartidos en los ultimos 21 dias, con un pico distinto por restaurante.
+

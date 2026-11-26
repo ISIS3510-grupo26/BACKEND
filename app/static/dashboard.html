@@ -152,6 +152,30 @@
       },
     },
     {
+      // BQ15 (tipo 2, Sprint 4): hora del dia con la menor espera reportada en cada restaurante (datos de la BQ4).
+      bq: 'BQ15', author: 'Tomas Diaz', endpoint: '/api/v1/analytics/best-time-to-go?days=28&minReports=2',
+      wide: true,
+      render: r => {
+        const hora = h => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'am' : 'pm'}`;
+        const calma = r.byHour.reduce((a, b) => (a === null || b.avgMinutes < a.avgMinutes ? b : a), null);
+        const conDato = r.spots.filter(s => s.bestHour !== null);
+        return {
+          key: calma ? hora(calma.hour) : '—',
+          label: calma
+            ? `is the calmest hour on campus (${calma.avgMinutes} min average wait) · ${r.totalReports} reports in the last ${r.days} days`
+            : `no wait reports in the last ${r.days} days`,
+          months: conDato.map(s => ({
+            month: `${s.emoji} ${s.name}`,
+            value: `best ${hora(s.bestHour)} (${s.bestHourAvgMinutes} min) · avoid ${hora(s.worstHour)} (${s.worstHourAvgMinutes} min)`,
+          })),
+          chart: {
+            type: 'bar', label: 'Average reported wait (min)',
+            labels: r.byHour.map(h => hora(h.hour)), values: r.byHour.map(h => h.avgMinutes),
+          },
+        };
+      },
+    },
+    {
       bq: 'BQ6', author: 'Lucas Galindo', endpoint: '/api/v1/recommendations/best-for-you?freshMinutes=120&limit=5',
       render: r => {
         const top = r.spots[0];
@@ -172,12 +196,29 @@
       }),
     },
     {
+      // BQ8 (tipo 3): % de visitas a la pagina de un restaurante con al menos una interaccion con las reseñas.
       bq: 'BQ8', author: 'Camilo Linares', endpoint: '/api/v1/analytics/review-interactions?months=6',
       render: r => ({
         key: pct(last(r.byMonth).interactionPercentage),
         label: `${last(r.byMonth).visitsWithInteraction} of ${last(r.byMonth).pageVisits} restaurant visits used the reviews in ${last(r.byMonth).month}`,
         chart: { type: 'bar', label: '% of visits with a review interaction', labels: r.byMonth.map(m => m.month), values: r.byMonth.map(m => m.interactionPercentage) },
       }),
+    },
+    {
+      // BQ9 (tipo 3): de los usuarios que abrieron recomendaciones por compatibilidad, % que llego al restaurante.
+      bq: 'BQ9', author: 'Esteban Alvarado', endpoint: '/api/v1/analytics/recommendation-visits?months=6',
+      mine: true,
+      render: r => {
+        const m = last(r.byMonth);
+        const top = r.topVisitedSpots[0];
+        return {
+          key: pct(m.visitRatePercentage),
+          label: `${m.usersVisited} of ${m.usersRecommended} students who opened a recommendation went there in ${m.month}` +
+            (top ? ` · most visited: ${top.emoji || ''} ${top.name || top.spotId}` : ''),
+          months: r.byMonth.map(x => ({ month: x.month, value: `${x.visits} visits / ${x.recommendationOpens} opens` })),
+          chart: { type: 'line', label: '% of students who visited', labels: r.byMonth.map(x => x.month), values: r.byMonth.map(x => x.visitRatePercentage) },
+        };
+      },
     },
     {
       bq: 'BQ10', author: 'Gabriela Perdomo', endpoint: '/api/v1/analytics/rating-usage?months=6',

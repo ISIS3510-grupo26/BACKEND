@@ -418,6 +418,36 @@ class LastWaitTimesReport(ApiModel):
     spots: list[LastWaitTime]  # todos los restaurantes, en el orden del catalogo
 
 
+# ---------- BQ15: mejor hora para ir a cada restaurante (Sprint 4, Tomas) ----------
+
+class HourlyWait(ApiModel):
+    hour: int                  # hora local 0-23
+    avg_minutes: float         # espera promedio reportada en esa hora
+    reports: int
+
+
+class BestTimeSpot(ApiModel):
+    spot_id: str
+    name: str
+    emoji: str
+    reports: int               # reportes del restaurante en la ventana
+    best_hour: int | None      # hora con menor espera promedio (None si no hay reportes)
+    best_hour_avg_minutes: float | None
+    worst_hour: int | None     # hora con mayor espera promedio
+    worst_hour_avg_minutes: float | None
+    by_hour: list[HourlyWait]  # solo las horas con reportes, de 0 a 23
+
+
+class BestTimeToGoReport(ApiModel):
+    question: str
+    days: int
+    tz_offset_minutes: int
+    min_reports: int
+    total_reports: int
+    by_hour: list[HourlyWait]  # todos los restaurantes juntos: que hora del dia es mas tranquila en el campus
+    spots: list[BestTimeSpot]  # todos los restaurantes, en el orden del catalogo
+
+
 # ---------- BQ6: menor tiempo de espera y mayor compatibilidad con el perfil de gusto ----------
 
 class BestForYouSpot(ApiModel):
@@ -510,3 +540,33 @@ class ReviewCrashesReport(ReviewCrashStats):
     recommendation: Literal["fix_crashes", "keep"]  # fix_crashes si crash_percentage > max_crash_percentage
     priorities: list[ReviewPriority]  # cambios a priorizar, del problema mas frecuente al menos frecuente
     by_month: list[MonthlyReviewCrashes]  # un elemento por mes de la ventana, del mas antiguo al actual
+
+
+# ---------- BQ9: visitas a restaurantes recomendados por compatibilidad ----------
+
+class RecommendationVisitStats(ApiModel):
+    users_recommended: int            # usuarios distintos que abrieron al menos un restaurante recomendado
+    users_visited: int                # de ellos, cuantos llegaron a uno de esos restaurantes
+    visit_rate_percentage: float      # users_visited / users_recommended * 100, 1 decimal (la BQ9)
+    recommendation_opens: int         # eventos recommendation_open
+    visits: int                       # eventos recommendation_visit
+    opens_to_visits_percentage: float  # visits / recommendation_opens * 100, 1 decimal
+
+
+class MonthlyRecommendationVisits(RecommendationVisitStats):
+    month: str                        # 'YYYY-MM' en hora local del campus
+
+
+class VisitedSpot(ApiModel):
+    spot_id: str
+    name: str | None
+    emoji: str | None
+    visits: int
+
+
+class RecommendationVisitsReport(RecommendationVisitStats):
+    question: str
+    months: int
+    tz_offset_minutes: int
+    top_visited_spots: list[VisitedSpot]          # restaurantes recomendados a los que mas se llego, maximo 5
+    by_month: list[MonthlyRecommendationVisits]   # un elemento por mes de la ventana, del mas antiguo al actual

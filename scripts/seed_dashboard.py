@@ -5,9 +5,11 @@ Uso:  python scripts/seed_dashboard.py [--url http://127.0.0.1:8000]
 Todo entra por la API, como lo mandaria la app, con platform="simulator":
 - BQ1, BQ2, BQ3 y BQ12: cargas y busquedas de restaurantes (las de simulate_telemetry.py).
 - BQ4 y BQ6: tiempos de espera reportados en la ultima hora.
+- BQ15: tiempos de espera de las ultimas 3 semanas a distintas horas (filas largas al mediodia, cortas a media tarde).
 - BQ7: favorite_added de 12 meses (usuarios de desarrollo sim-user-NN, sin cuenta).
 - BQ8: visitas a restaurantes de 6 meses; en una parte el estudiante usa las reseñas (eventos review_interaction
   "rvi-<visita>-<accion>") y algunas reseñas reciben votos Helpful.
+- BQ9: aperturas de recomendaciones (recommendation_open) de 6 meses y, en parte, la llegada (recommendation_visit).
 - BQ10 y BQ13: cuentas sim-reviewer-N@campusbites.dev que ven restaurantes, intentan publicar reseñas
   (algunas fallan o la app se cierra) y publican. El servidor fecha las reseñas con la hora actual, asi que
   solo el mes actual tiene calificaciones; los meses anteriores tienen vistas.
@@ -150,6 +152,33 @@ def seed_reviews(base: str, now: datetime, reviewers: int = 10) -> str:
     return f"BQ10/BQ13: {views} vistas, {attempts} intentos de reseña, {published} reseñas nuevas"
 
 
+def seed_wait_history(base: str, now: datetime) -> str:
+    created = 0
+    for _ in range(120):
+        reported = (now - timedelta(days=random.randint(1, 21))).astimezone(BOGOTA)
+        reported = reported.replace(hour=random.randint(7, 20), minute=random.randint(0, 59))
+        rush = 11 <= reported.hour <= 13  # la fila del almuerzo
+        status, _ = call(f"{base}/api/v1/spots/{random.choice(SPOTS)}/wait-times", "POST", {
+            "reportId": str(uuid.uuid4()), "platform": "simulator", "reportedAt": reported.isoformat(),
+            "minutes": random.randint(15, 35) if rush else random.randint(2, 15),
+        })
+        created += status == 201
+    return f"BQ15: {created} tiempos de espera de las ultimas 3 semanas"
+
+
+def seed_recommendations(base: str, now: datetime) -> str:
+    events = []
+    for months_ago in range(6):
+        for u in random.sample(range(1, 31), random.randint(6, 14)):
+            user, spot = f"sim-user-{u:02d}", random.choice(SPOTS)
+            opened = in_month(now, months_ago)
+            events.append(event("recommendation_open", opened, spot, user))
+            if random.random() < 0.45:  # llego al restaurante recomendado
+                arrived = min(opened + timedelta(minutes=random.randint(5, 40)), now)
+                events.append(event("recommendation_visit", arrived, spot, user))
+    return f"BQ9: {send(base, events)} aperturas y visitas desde recomendaciones"
+
+
 def seed_review_interactions(base: str, now: datetime) -> str:
     events = []
     for months_ago in range(6):
@@ -195,7 +224,8 @@ def main():
     parser.add_argument("--url", default="http://127.0.0.1:8000")
     base = parser.parse_args().url.rstrip("/")
     now = datetime.now(timezone.utc)
-    for seed in (seed_page_loads, seed_wait_times, seed_favorites, seed_reviews, seed_review_interactions, seed_map):
+    for seed in (seed_page_loads, seed_wait_times, seed_wait_history, seed_favorites, seed_reviews,
+                 seed_review_interactions, seed_recommendations, seed_map):
         print(seed(base, now))
     print(f"Listo: abre {base}/dashboard")
 

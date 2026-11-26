@@ -27,6 +27,13 @@ class WaitTimesRepository:
             "SELECT spot_id, minutes, reported_at FROM wait_time_reports WHERE report_id = ?", (report_id,)
         ).fetchone()
 
+    def reports_since(self, since: datetime) -> list[sqlite3.Row]:
+        """BQ15: todos los reportes desde `since`, con su restaurante. La hora local se calcula en el servicio."""
+        return self.conn.execute(
+            "SELECT spot_id, minutes, reported_at FROM wait_time_reports WHERE reported_at >= ?",
+            (_iso(since),),
+        ).fetchall()
+
     def latest_by_spot(self, recent_since: datetime) -> list[sqlite3.Row]:
         """Para cada restaurante, su reporte mas reciente (o nada) y cuantos reportes tuvo desde recent_since."""
         return self.conn.execute(

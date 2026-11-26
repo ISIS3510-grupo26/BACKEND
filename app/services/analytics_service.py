@@ -6,7 +6,8 @@ from app.schemas import (FailedRequestsReport, FailureGroup, HourlyRanking, MapD
                          MonthlyActiveFavoritersReport, MonthlyFavoriters, MonthlyMapDisplay, MonthlyRatingUsage, RatingUsageReport, SlowLoadGroup, SlowLoadsReport,
                          SpotHourlyActivity, SpotViewsByHourReport, SearchesByWeekdayReport, WeekdaySearchCount,
                          MonthlyReviewCrashes, ReviewCrashesReport, ReviewCrashStats, ReviewPriority,
-                         MonthlyReviewInteractions, ReviewInteractionsReport)
+                         MonthlyReviewInteractions, ReviewInteractionsReport,
+                         MonthlyRecommendationVisits, RecommendationVisitsReport, RecommendationVisitStats, VisitedSpot)
 
 Q_SLOW = "What is the percentage of restaurant page loads that take more than {s:g} seconds? By device and OS"
 Q_FAILED = "What is the percentage of failed requests when loading the restaurant's information?"
@@ -28,6 +29,8 @@ REVIEW_CHANGES = {
     "rejected": "Check the rating, session and duplicate review before sending",
     "app_error": "Fix the app error that happens while sending",
 }
+Q_RECOMMENDATION_VISITS = ("What is the rate of users that visit restaurants based on the app's compatibility "
+                           "recommendations each month?")
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
@@ -55,6 +58,18 @@ def _review_stats(attempts: int, published: int, failures: dict[str, int], saved
     ).model_dump()
     
     
+def _visit_stats(row) -> RecommendationVisitStats:
+    """Totales de BQ9 para un mes o para toda la ventana (fila de recommendation_visits o None)."""
+    opens, visits = (row["opens"], row["visits"]) if row else (0, 0)
+    recommended, visited = (row["users_recommended"], row["users_visited"]) if row else (0, 0)
+    return RecommendationVisitStats(
+        users_recommended=recommended, users_visited=visited,
+        visit_rate_percentage=round(100.0 * visited / recommended, 1) if recommended else 0.0,
+        recommendation_opens=opens, visits=visits,
+        opens_to_visits_percentage=round(100.0 * visits / opens, 1) if opens else 0.0,
+    )
+
+
 class AnalyticsService:
     def __init__(self, repo: TelemetryRepository):
         self.repo = repo
@@ -322,3 +337,29 @@ class AnalyticsService:
             ],
         )
         
+
+    def recommendation_visits(self, months: int, tz_offset_minutes: int,
+                              now: datetime | None = None) -> RecommendationVisitsReport:
+        """BQ9 (tipo 3): de los usuarios que abrieron restaurantes recomendados por compatibilidad, % que fue a uno.
+
+        Por mes calendario (hora local) y en toda la ventana. Devuelve los `months` meses hasta el actual,
+        incluidos los que no tuvieron actividad (en 0), y los 5 restaurantes recomendados con mas visitas.
+        """
+        now = now or datetime.now(timezone.utc)
+        local = now.astimezone(timezone.utc) + timedelta(minutes=tz_offset_minutes)
+        index = local.year * 12 + local.month - 1
+        window = [f"{i // 12:04d}-{i % 12 + 1:02d}" for i in range(index - months + 1, index + 1)]
+        monthly = {r["month"]: r for r in self.repo.recommendation_visits(tz_offset_minutes, window[0], window[-1],
+                                                                         by_month=True)}
+        overall = self.repo.recommendation_visits(tz_offset_minutes, window[0], window[-1], by_month=False)
+        top = self.repo.top_recommended_visits(tz_offset_minutes, window[0], window[-1])
+        return RecommendationVisitsReport(
+            **_visit_stats(overall[0] if overall else None).model_dump(),
+            question=Q_RECOMMENDATION_VISITS,
+            months=months,
+            tz_offset_minutes=tz_offset_minutes,
+            top_visited_spots=[VisitedSpot(spot_id=r["spot_id"], name=r["name"], emoji=r["emoji"], visits=r["visits"])
+                               for r in top],
+            by_month=[MonthlyRecommendationVisits(month=m, **_visit_stats(monthly.get(m)).model_dump())
+                      for m in window],
+        )
