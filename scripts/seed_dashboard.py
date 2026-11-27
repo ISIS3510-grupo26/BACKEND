@@ -5,7 +5,7 @@ Uso:  python scripts/seed_dashboard.py [--url http://127.0.0.1:8000]
 Todo entra por la API, como lo mandaria la app, con platform="simulator":
 - BQ1, BQ2, BQ3 y BQ12: cargas y busquedas de restaurantes (las de simulate_telemetry.py).
 - BQ4 y BQ6: tiempos de espera reportados en la ultima hora.
-- BQ15: tiempos de espera de las ultimas 3 semanas a distintas horas (filas largas al mediodia, cortas a media tarde).
+- BQ8: tiempos de espera de las ultimas 3 semanas a distintas horas (filas largas al mediodia, cortas a media tarde).
 - BQ7: favorite_added de 12 meses (usuarios de desarrollo sim-user-NN, sin cuenta).
 - BQ8: visitas a restaurantes de 6 meses; en una parte el estudiante usa las reseñas (eventos review_interaction
   "rvi-<visita>-<accion>") y algunas reseñas reciben votos Helpful.
@@ -163,7 +163,7 @@ def seed_wait_history(base: str, now: datetime) -> str:
             "minutes": random.randint(15, 35) if rush else random.randint(2, 15),
         })
         created += status == 201
-    return f"BQ15: {created} tiempos de espera de las ultimas 3 semanas"
+    return f"BQ8: {created} tiempos de espera de las ultimas 3 semanas"
 
 
 def seed_recommendations(base: str, now: datetime) -> str:

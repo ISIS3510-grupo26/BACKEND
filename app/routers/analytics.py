@@ -148,5 +148,5 @@ def best_time_to_go(
     now: datetime = Depends(current_time),
     conn: sqlite3.Connection = Depends(get_conn),
 ):
-    """BQ15 (tipo 2): hora del dia con la menor espera reportada en cada restaurante (datos de la BQ4)."""
+    """BQ8 (tipo 2): hora del dia con la menor espera reportada en cada restaurante (datos de la BQ4)."""
     return WaitTimesService(conn).best_time_to_go(days, tz_offset_minutes, min_reports, now=now)
