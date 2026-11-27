@@ -1,4 +1,4 @@
-"""Pruebas de la BQ8: la hora del dia con menor espera reportada en cada restaurante."""
+"""Pruebas de la BQ15: la hora del dia con menor espera reportada en cada restaurante."""
 from tests.test_wait_times import at_time, client, report  # noqa: F401  (fixtures compartidas)
 
 URL = "/api/v1/analytics/best-time-to-go"

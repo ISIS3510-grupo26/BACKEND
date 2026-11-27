@@ -12,11 +12,12 @@ Sirve el catálogo de restaurantes y recibe la telemetría con la que se respond
 | BQ5 | Which restaurants in the user's favorites are open now and within a 15-minute walk? | `GET /api/v1/users/{userId}/favorites/nearby?lat=&lng=&maxWalkMinutes=15` |
 | BQ6 | Which restaurants have the shortest waiting time and the best match with my taste profile? | `GET /api/v1/recommendations/best-for-you?freshMinutes=120` |
 | BQ7 | How many active users add one or more restaurants to their favorites each month? | `GET /api/v1/analytics/monthly-active-favoriters` |
-| BQ8 | At what time of the day is the reported waiting time at each restaurant the shortest? | `GET /api/v1/analytics/best-time-to-go?days=28&minReports=2` |
+| BQ8 | What percentage of restaurant page visits include an interaction with the comments each month? | `GET /api/v1/analytics/review-interactions?months=6` |
 | BQ9 | What is the rate of users that visit restaurants based on the app's compatibility recommendations each month? | `GET /api/v1/analytics/recommendation-visits?months=6` |
 | BQ10 | What percentage of users use the restaurant rating feature when looking at a restaurant's page? | `GET /api/v1/analytics/rating-usage?months=6` |
 | BQ13 | How does the number of app crashes during the restaurant review submission affect the number of reviews successfully published and what changes to the review submission feature should be prioritized based on this information? | `GET /api/v1/analytics/review-crashes?months=3&maxCrashPercentage=5` |
 | BQ14 | How many times does the app display the restaurant's location incorrectly on the map or not at all, and should the map feature be improved or changed based on this? | `GET /api/v1/analytics/map-display-issues?months=3&maxIssuePercentage=10` |
+| BQ15 | At what time of the day is the reported waiting time at each restaurant the shortest? | `GET /api/v1/analytics/best-time-to-go?days=28&minReports=2` |
 
 > **Nota de numeración:** hay dos preguntas marcadas BQ3, la de vistas por hora (telemetría) y la de
 > recomendaciones cercanas (feature de la *Taste Map*). Falta confirmar con el equipo cuál conserva el número.
@@ -97,12 +98,16 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | GET | `/api/v1/spots` | Lista resumida de restaurantes (sin menú ni reseñas) |
 | GET | `/api/v1/spots/{id}` | Información completa del restaurante: **esta es la "restaurant page load"** que se mide |
 | POST | `/api/v1/spots/{id}/reviews` | Publicar calificación con token (`stars` 1–5, `text` opcional). Guarda la reseña y actualiza el promedio en una sola transacción (Unit of Work). `409` si el usuario ya calificó ese restaurante |
-| POST | `/api/v1/telemetry/page-loads` | Lote de eventos (1–500), idempotente por `eventId`. `screen` = `restaurant_detail` (vista de página), `search` (elegido desde el buscador), `favorite_added` (guardó el restaurante; exige `userId` y `spotId`), `recommendation_open` (lo abrió desde una recomendación por compatibilidad) o `recommendation_visit` (llegó a ese restaurante); estos dos últimos exigen `spotId` |
+| GET | `/api/v1/spots/{id}/reviews` | Todas las reseñas paginadas ("All reviews"): `sort` = `newest`·`highest`·`lowest`·`helpful`, `stars` 1–5, `q` (texto o autor, sin distinguir mayúsculas), `page`, `pageSize` (máx. 50). Devuelve `{items, page, pageSize, total}`; cada item trae `id` y `helpfulCount`. `404` si el restaurante no existe |
+| PUT / DELETE | `/api/v1/spots/{id}/reviews/{reviewId}/helpful` | Marcar / quitar Helpful. El usuario sale del token (sin token, `?userId=` de desarrollo, como en favoritos). Idempotente: repetirlo responde `204` sin cambiar el contador. `404` si la reseña no es de ese restaurante |
+| GET | `/api/v1/spots/{id}/reviews/helpful` | Reseñas de ese restaurante que el usuario marcó como Helpful: `{"reviewIds": [...]}`. Mismo usuario que PUT/DELETE (token o `?userId=`). `404` si el restaurante no existe |
+| POST | `/api/v1/telemetry/page-loads` | Lote de eventos (1–500), idempotente por `eventId`. `screen` = `restaurant_detail` (vista de página), `search` (elegido desde el buscador), `favorite_added` (guardó el restaurante; exige `userId` y `spotId`), `recommendation_open` (lo abrió desde una recomendación por compatibilidad), `recommendation_visit` (llegó a ese restaurante) o `review_interaction` (usó las reseñas durante una visita, BQ8); estos tres últimos exigen `spotId` |
 | GET | `/api/v1/analytics/slow-page-loads` | BQ1 |
 | GET | `/api/v1/analytics/failed-requests` | BQ2 |
 | GET | `/api/v1/analytics/spot-views-by-hour` | BQ3 (vistas + búsquedas por restaurante en cada hora) |
 | GET | `/api/v1/analytics/monthly-active-favoriters` | BQ7 (usuarios distintos que agregan favoritos, por mes) |
-| GET | `/api/v1/analytics/best-time-to-go` | BQ8 (espera promedio por hora local en cada restaurante, con la mejor y la peor hora; usa los reportes de la BQ4) |
+| GET | `/api/v1/analytics/review-interactions` | BQ8 (% de visitas a un restaurante con al menos una interacción con las reseñas, por mes y por acción) |
+| GET | `/api/v1/analytics/best-time-to-go` | BQ15 (espera promedio por hora local en cada restaurante, con la mejor y la peor hora; usa los reportes de la BQ4) |
 | GET | `/api/v1/analytics/rating-usage` | BQ10 (de los usuarios que vieron páginas de restaurantes en el mes, % que calificó) |
 | GET | `/api/v1/analytics/recommendation-visits` | BQ9 (de los usuarios que abrieron recomendaciones por compatibilidad, % que llegó a uno de esos restaurantes, por mes) |
 | GET | `/api/v1/analytics/map-display-issues` | BQ14 (cargas del mapa con problemas, por tipo y por mes, y si conviene mejorar el mapa) |
@@ -198,6 +203,12 @@ Contrato del evento de telemetría (cualquier front debe enviarlo igual):
 - BQ7: *usuario activo que agrega favoritos* = `userId` distinto con al menos un evento `screen=favorite_added` en el
   mes calendario local (`occurredAt` desplazado con `tzOffsetMinutes`): `COUNT(DISTINCT userId)` por mes. Se reporta
   también el total de eventos del mes. Los meses sin actividad salen en `0`. BQ1/BQ2/BQ3 ignoran estos eventos.
+- BQ8: *visita* = evento `restaurant_detail` con `success=true`, en el mes local de esa visita. La app manda un evento
+  `screen=review_interaction` (exige `spotId`) con `eventId = "rvi-<eventId de la visita>-<acción>"`, acción ∈
+  `open_all`, `sort`, `filter`, `search`, `helpful`, la primera vez que ocurre cada acción en esa visita. Así la visita
+  se liga sin columnas nuevas y una acción repetida trae el mismo `eventId` (la ingesta la descarta). *Visita con
+  interacción* = visita con al menos uno de esos eventos; varias acciones la cuentan una vez. Se reporta también cuántas
+  visitas tuvieron cada acción (`byAction`). Una interacción de una visita fallida o que nunca llegó no cuenta.
 - BQ14: la app manda eventos `screen=map_display` (sin `spotId`). *Carga del mapa* = un evento `map_display` cuyo
   `errorType` es nulo o distinto de `tiles_failed`: la app manda **uno por carga**, con `success=true` si todo salió
   bien o `success=false` y `errorType` = `load_failed` (no llegaron los restaurantes), `location_fallback` (sin
@@ -314,14 +325,21 @@ Una sola página con **todas** las business questions del equipo, leída de la m
 endpoints `/api/v1/analytics/...` (no consulta la base directamente). Con el backend corriendo, abrir
 **http://localhost:8000/dashboard** en el navegador.
 
-- Una tarjeta por BQ: BQ1, BQ2, BQ4 y BQ8 (Tomas Diaz), BQ6 (Lucas Galindo), BQ7 (Camilo Linares), BQ10 (Gabriela Perdomo), BQ11 (Lucas Galindo),
-  BQ12 (Alejandro Vides), BQ9 y BQ14 (Esteban Alvarado), con la pregunta, el número clave y un gráfico simple. La BQ14
+- Una tarjeta por BQ: BQ1, BQ2, BQ4 y BQ15 (Tomas Diaz), BQ6 (Lucas Galindo), BQ7 y BQ8 (Camilo Linares), BQ10 y BQ13
+  (Gabriela Perdomo), BQ11 (Lucas Galindo), BQ12 (Alejandro Vides), BQ9 y BQ14 (Esteban Alvarado), con la pregunta, el número clave y un gráfico simple. La BQ14
   muestra los problemas por tipo, el % de cada mes y la recomendación (`IMPROVE` / `KEEP`) en grande.
 - Botón **Refresh** y actualización automática cada 30 s. Si un endpoint falla, solo su tarjeta muestra el error.
 - La BQ11 todavía no tiene endpoint: su tarjeta dice "Endpoint not available yet". Cuando exista, basta con poner su
   ruta y su `render` en la lista `CARDS` de `app/static/dashboard.html`.
 - Es un solo archivo HTML + CSS + JavaScript (Chart.js desde cdnjs), sin build ni framework. Los datos sintéticos
   de `python scripts/simulate_telemetry.py` llenan BQ1, BQ2 y BQ12; las demás tarjetas se llenan usando la app.
+- Para la demo, `python scripts/seed_dashboard.py` (con el backend corriendo) llena **todas** las tarjetas con datos
+  sintéticos por la API (`platform=simulator`): cargas y búsquedas, tiempos de espera (de la última hora y de las
+  últimas 3 semanas, para la BQ15), favoritos de 12 meses, cuentas `sim-reviewer-N@campusbites.dev` que ven
+  restaurantes e intentan publicar reseñas, visitas con interacciones con las reseñas (BQ8) y votos Helpful,
+  aperturas y visitas desde recomendaciones (BQ9) y cargas del mapa. Las reseñas
+  quedan con la fecha de hoy, así que en la BQ10 solo el mes actual tiene calificaciones. La BQ11 sigue vacía
+  porque no tiene endpoint.
 
 ## a. Architecture – estructura general y componentes
 
@@ -399,7 +417,7 @@ Ejemplo, BQ3:
 | Táctica **security – autenticación** | Email + contraseña (bcrypt) → JWT Bearer de 7 días; el `userId` sale del token y no se puede actuar a nombre de una cuenta registrada sin su token | `auth_service.py`, `security.py` (`optional_user_id`, `resolve_acting_user`) |
 | Táctica **interoperability** | Contrato JSON versionado (`/api/v1`), camelCase, CORS abierto para el otro front | `schemas.py`, `main.py` |
 
-## BQ8 · Best time to go (Sprint 4, Tomas Diaz)
+## BQ15 · Best time to go (Sprint 4, Tomas Diaz)
 
 **Tipo 2.** "At what time of the day is the reported waiting time at each restaurant the shortest?"
 Reutiliza los reportes de espera de la BQ4 (`wait_time_reports`): cada reporte cae en la hora local en que el

@@ -1,18 +1,20 @@
 """Servicio de analitica: convierte los agregados SQL en respuestas a las business questions."""
 from datetime import datetime, timedelta, timezone
 
-from app.repositories.telemetry_repository import TelemetryRepository
+from app.repositories.telemetry_repository import REVIEW_ACTIONS, TelemetryRepository
 from app.schemas import (FailedRequestsReport, FailureGroup, HourlyRanking, MapDisplayIssuesReport, MapDisplayStats,
                          MonthlyActiveFavoritersReport, MonthlyFavoriters, MonthlyMapDisplay, MonthlyRatingUsage, RatingUsageReport, SlowLoadGroup, SlowLoadsReport,
                          SpotHourlyActivity, SpotViewsByHourReport, SearchesByWeekdayReport, WeekdaySearchCount,
                          MonthlyReviewCrashes, ReviewCrashesReport, ReviewCrashStats, ReviewPriority,
+                         MonthlyReviewInteractions, ReviewInteractionsReport,
                          MonthlyRecommendationVisits, RecommendationVisitsReport, RecommendationVisitStats, VisitedSpot)
 
 Q_SLOW = "What is the percentage of restaurant page loads that take more than {s:g} seconds? By device and OS"
 Q_FAILED = "What is the percentage of failed requests when loading the restaurant's information?"
 Q_VIEWS_BY_HOUR = "Which restaurants receive the highest number of page views and searches during each hour?"
 Q_MONTHLY_FAVORITERS = "How many active users add one or more restaurants to their favorites each month?"
-Q_RATING_USAGE = "What percentage of users use the restaurant rating feature when looking at a restaurant's page?"
+Q_REVIEW_INTERACTIONS = "What percentage of restaurant page visits include an interaction with the comments each month?"
+Q_RATING_USAGE ="What percentage of users use the restaurant rating feature when looking at a restaurant's page?"
 Q_SEARCHES_BY_WEEKDAY = "Which days of the week have the highest number of restaurant searches?"
 Q_MAP_DISPLAY = ("How many times does the app display the restaurant's location incorrectly on the map or not at all, "
                  "and should the map feature be improved or changed based on this?")
@@ -175,7 +177,30 @@ class AnalyticsService:
                 for m in window
             ],
         )
-        
+
+    def review_interactions(self, months: int, tz_offset_minutes: int, now: datetime | None = None,
+                            platform: str | None = None) -> ReviewInteractionsReport:
+        """BQ8 (tipo 3): por mes, % de visitas a la pagina de un restaurante con al menos una interaccion con las
+        reseñas. Devuelve todos los meses de la ventana (en 0 si no hubo visitas)."""
+        now = now or datetime.now(timezone.utc)
+        local = now.astimezone(timezone.utc) + timedelta(minutes=tz_offset_minutes)
+        index = local.year * 12 + local.month - 1
+        window = [f"{i // 12:04d}-{i % 12 + 1:02d}" for i in range(index - months + 1, index + 1)]
+        rows = {r["month"]: r for r in self.repo.review_interactions_by_month(tz_offset_minutes, window[0], window[-1],
+                                                                             platform=platform)}
+        by_month = []
+        for m in window:
+            row = rows.get(m)
+            visits = row["visits"] if row else 0
+            used = row["with_interaction"] if row else 0
+            by_month.append(MonthlyReviewInteractions(
+                month=m, page_visits=visits, visits_with_interaction=used,
+                interaction_percentage=_pct(used, visits),
+                by_action={a: (row[a] if row else 0) for a in REVIEW_ACTIONS},
+            ))
+        return ReviewInteractionsReport(question=Q_REVIEW_INTERACTIONS, months=months,
+                                        tz_offset_minutes=tz_offset_minutes, by_month=by_month)
+
     def rating_usage(self, months: int, tz_offset_minutes: int, now: datetime | None = None,
                      platform: str | None = None) -> RatingUsageReport:
         """BQ10: por mes, raters / viewers * 100. Devuelve todos los meses de la ventana (en 0 si no hubo vistas)."""

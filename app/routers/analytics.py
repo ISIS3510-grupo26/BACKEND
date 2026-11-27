@@ -8,8 +8,8 @@ from app.config import settings
 from app.db import get_conn
 from app.repositories.telemetry_repository import TelemetryRepository
 from app.schemas import (BestTimeToGoReport, FailedRequestsReport, MapDisplayIssuesReport, MonthlyActiveFavoritersReport, RatingUsageReport,
-                         RecommendationVisitsReport, ReviewCrashesReport, SlowLoadsReport, SpotViewsByHourReport,
-                         SearchesByWeekdayReport)
+                         RecommendationVisitsReport, ReviewCrashesReport, ReviewInteractionsReport, SlowLoadsReport,
+                         SpotViewsByHourReport, SearchesByWeekdayReport)
 from app.routers.spots import current_time
 from app.services.analytics_service import AnalyticsService
 from app.services.wait_times_service import WaitTimesService
@@ -80,6 +80,17 @@ def rating_usage(
     return service.rating_usage(months=months, tz_offset_minutes=tz_offset_minutes, platform=platform)
 
 
+@router.get("/review-interactions", response_model=ReviewInteractionsReport)
+def review_interactions(
+    months: int = Query(6, ge=1, le=36, description="Meses calendario hacia atras, incluido el actual"),
+    tz_offset_minutes: int = Query(settings.campus_tz_offset_minutes, alias="tzOffsetMinutes", ge=-840, le=840),
+    platform: str | None = Query(None, description="Filtra las visitas por app: android-kotlin, flutter, ..."),
+    service: AnalyticsService = Depends(get_service),
+):
+    """BQ8 (tipo 3): % de visitas a la pagina de un restaurante que incluyen una interaccion con las reseñas, por mes."""
+    return service.review_interactions(months=months, tz_offset_minutes=tz_offset_minutes, platform=platform)
+
+
 @router.get("/searches-by-weekday", response_model=SearchesByWeekdayReport)
 def searches_by_weekday(
     days: int = Query(28, ge=1, le=365, description="Ventana movil de dias hacia atras"),
@@ -137,5 +148,5 @@ def best_time_to_go(
     now: datetime = Depends(current_time),
     conn: sqlite3.Connection = Depends(get_conn),
 ):
-    """BQ8 (tipo 2): hora del dia con la menor espera reportada en cada restaurante (datos de la BQ4)."""
+    """BQ15 (tipo 2): hora del dia con la menor espera reportada en cada restaurante (datos de la BQ4)."""
     return WaitTimesService(conn).best_time_to_go(days, tz_offset_minutes, min_reports, now=now)

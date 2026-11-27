@@ -1,4 +1,5 @@
 """Repository de telemetria: escritura de eventos y consultas agregadas en SQL."""
+import re
 import sqlite3
 from datetime import datetime, timezone
 
@@ -14,6 +15,18 @@ CRASH = "crash"  # BQ13: la app se cerro mientras enviaba la reseña
 RECOMMENDATION_OPEN = "recommendation_open"  # BQ9: abrio un restaurante desde una recomendacion por compatibilidad
 RECOMMENDATION_VISIT = "recommendation_visit"  # BQ9: llego a ese restaurante (la app lo detecta por GPS)
 RECOMMENDATION_SCREENS = (RECOMMENDATION_OPEN, RECOMMENDATION_VISIT)
+REVIEW_INTERACTION_SCREEN = "review_interaction"  # BQ8: el estudiante uso las reseñas durante una visita
+REVIEW_ACTIONS = ("open_all", "sort", "filter", "search", "helpful")
+# BQ8: eventId = "rvi-<eventId del restaurant_detail>-<accion>". La visita va dentro del id (sin columnas nuevas) y
+# una accion repetida en la misma visita trae el mismo id, asi que INSERT OR IGNORE la cuenta una sola vez.
+REVIEW_INTERACTION_ID = re.compile(rf"^rvi-(?P<visit>[A-Za-z0-9-]{{8,51}})-(?P<action>{'|'.join(REVIEW_ACTIONS)})$")
+
+# Visita y accion de un evento review_interaction, sacadas del eventId en SQL. Las acciones no tienen '-', asi que
+# cada una se reconoce por su sufijo "-<accion>" (lista fija: no se interpola input del usuario).
+_VISIT_OF_INTERACTION = "CASE " + " ".join(
+    f"WHEN event_id LIKE '%-{a}' THEN substr(event_id, 5, length(event_id) - {5 + len(a)})" for a in REVIEW_ACTIONS
+) + " END"
+_ACTION_OF_INTERACTION = "CASE " + " ".join(f"WHEN event_id LIKE '%-{a}' THEN '{a}'" for a in REVIEW_ACTIONS) + " END"
 
 # Columnas por las que se permite agrupar (lista blanca: nunca se interpola input del usuario).
 GROUP_EXPRESSIONS = {
@@ -233,6 +246,37 @@ class TelemetryRepository:
             f"WHERE user_id IS NOT NULL AND created_at IS NOT NULL AND {local_month} BETWEEN ? AND ? "
             "GROUP BY month",
             [str(tz_offset_minutes), str(tz_offset_minutes), first_month, last_month],
+        ).fetchall()
+
+    def review_interactions_by_month(self, tz_offset_minutes: int, first_month: str, last_month: str,
+                                     platform: str | None = None) -> list[sqlite3.Row]:
+        """BQ8: por mes local de la visita, visitas a la pagina de un restaurante (restaurant_detail exitoso), cuantas
+        tuvieron al menos una interaccion con las reseñas y cuantas tuvieron cada accion.
+
+        Cada review_interaction se liga a su visita por el eventId ("rvi-<visita>-<accion>"); una interaccion cuya
+        visita no llego (o fallo) no cuenta. Varias acciones en la misma visita la cuentan una vez.
+        """
+        local_month = "strftime('%Y-%m', occurred_at, ? || ' minutes')"
+        visit_clauses = ["screen = ?", "success = 1", f"{local_month} BETWEEN ? AND ?"]
+        params: list = [str(tz_offset_minutes), RESTAURANT_SCREEN, str(tz_offset_minutes), first_month, last_month]
+        if platform:
+            visit_clauses.append("platform = ?")
+            params.append(platform)
+        params.append(REVIEW_INTERACTION_SCREEN)
+        per_action = ", ".join(f"MAX(CASE WHEN x.action = '{a}' THEN 1 ELSE 0 END) AS {a}" for a in REVIEW_ACTIONS)
+        return self.conn.execute(
+            f"WITH visits AS (SELECT event_id, {local_month} AS month FROM page_load_events "
+            f"                WHERE {' AND '.join(visit_clauses)}), "
+            f"     interactions AS (SELECT DISTINCT {_VISIT_OF_INTERACTION} AS visit_id, "
+            f"                             {_ACTION_OF_INTERACTION} AS action "
+            "                      FROM page_load_events WHERE screen = ?), "
+            "     per_visit AS (SELECT v.month, v.event_id, MAX(CASE WHEN x.visit_id IS NULL THEN 0 ELSE 1 END) AS used, "
+            f"                         {per_action} "
+            "                  FROM visits v LEFT JOIN interactions x ON x.visit_id = v.event_id GROUP BY v.event_id) "
+            "SELECT month, COUNT(*) AS visits, SUM(used) AS with_interaction, "
+            f"       {', '.join(f'SUM({a}) AS {a}' for a in REVIEW_ACTIONS)} "
+            "FROM per_visit GROUP BY month ORDER BY month",
+            params,
         ).fetchall()
 
     def recommendation_visits(self, tz_offset_minutes: int, first_month: str, last_month: str,
