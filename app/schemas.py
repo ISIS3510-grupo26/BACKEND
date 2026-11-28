@@ -418,7 +418,7 @@ class LastWaitTimesReport(ApiModel):
     spots: list[LastWaitTime]  # todos los restaurantes, en el orden del catalogo
 
 
-# ---------- BQ15: mejor hora para ir a cada restaurante (Sprint 4, Tomas) ----------
+# ---------- BQ8: mejor hora para ir a cada restaurante (Sprint 4, Tomas) ----------
 
 class HourlyWait(ApiModel):
     hour: int                  # hora local 0-23

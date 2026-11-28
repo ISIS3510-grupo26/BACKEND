@@ -67,7 +67,7 @@ class WaitTimesService:
 
     def best_time_to_go(self, days: int, tz_offset_minutes: int, min_reports: int = 1,
                         now: datetime | None = None) -> BestTimeToGoReport:
-        """BQ15 (tipo 2): para cada restaurante, la hora local con menor espera promedio reportada.
+        """BQ8 (tipo 2): para cada restaurante, la hora local con menor espera promedio reportada.
 
         Usa los mismos reportes de la BQ4. Cada reporte cae en la hora local en que el estudiante lo hizo
         (reported_at + tzOffsetMinutes), no en la hora en que llego al servidor. Una hora con menos de

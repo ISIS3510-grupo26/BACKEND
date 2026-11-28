@@ -1,4 +1,4 @@
-"""Genera reportes de tiempo de espera de prueba (BQ4) repartidos en los ultimos dias, para la demo de la BQ15.
+"""Genera reportes de tiempo de espera de prueba (BQ4) repartidos en los ultimos dias, para la demo de la BQ8.
 
 Uso:  python scripts/simulate_wait_reports.py [--url http://localhost:8000] [--n 250] [--days 21]
 

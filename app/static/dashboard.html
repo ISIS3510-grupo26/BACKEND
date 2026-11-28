@@ -152,8 +152,8 @@
       },
     },
     {
-      // BQ15 (tipo 2, Sprint 4): hora del dia con la menor espera reportada en cada restaurante (datos de la BQ4).
-      bq: 'BQ15', author: 'Tomas Diaz', endpoint: '/api/v1/analytics/best-time-to-go?days=28&minReports=2',
+      // BQ8 (tipo 2, Sprint 4): hora del dia con la menor espera reportada en cada restaurante (datos de la BQ4).
+      bq: 'BQ8', author: 'Tomas Diaz', endpoint: '/api/v1/analytics/best-time-to-go?days=28&minReports=2',
       wide: true,
       render: r => {
         const hora = h => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'am' : 'pm'}`;

@@ -17,7 +17,7 @@ Sirve el catálogo de restaurantes y recibe la telemetría con la que se respond
 | BQ10 | What percentage of users use the restaurant rating feature when looking at a restaurant's page? | `GET /api/v1/analytics/rating-usage?months=6` |
 | BQ13 | How does the number of app crashes during the restaurant review submission affect the number of reviews successfully published and what changes to the review submission feature should be prioritized based on this information? | `GET /api/v1/analytics/review-crashes?months=3&maxCrashPercentage=5` |
 | BQ14 | How many times does the app display the restaurant's location incorrectly on the map or not at all, and should the map feature be improved or changed based on this? | `GET /api/v1/analytics/map-display-issues?months=3&maxIssuePercentage=10` |
-| BQ15 | At what time of the day is the reported waiting time at each restaurant the shortest? | `GET /api/v1/analytics/best-time-to-go?days=28&minReports=2` |
+| BQ8 | At what time of the day is the reported waiting time at each restaurant the shortest? | `GET /api/v1/analytics/best-time-to-go?days=28&minReports=2` |
 
 > **Nota de numeración:** hay dos preguntas marcadas BQ3, la de vistas por hora (telemetría) y la de
 > recomendaciones cercanas (feature de la *Taste Map*). Falta confirmar con el equipo cuál conserva el número.
@@ -107,7 +107,7 @@ En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `fr
 | GET | `/api/v1/analytics/spot-views-by-hour` | BQ3 (vistas + búsquedas por restaurante en cada hora) |
 | GET | `/api/v1/analytics/monthly-active-favoriters` | BQ7 (usuarios distintos que agregan favoritos, por mes) |
 | GET | `/api/v1/analytics/review-interactions` | BQ8 (% de visitas a un restaurante con al menos una interacción con las reseñas, por mes y por acción) |
-| GET | `/api/v1/analytics/best-time-to-go` | BQ15 (espera promedio por hora local en cada restaurante, con la mejor y la peor hora; usa los reportes de la BQ4) |
+| GET | `/api/v1/analytics/best-time-to-go` | BQ8 (espera promedio por hora local en cada restaurante, con la mejor y la peor hora; usa los reportes de la BQ4) |
 | GET | `/api/v1/analytics/rating-usage` | BQ10 (de los usuarios que vieron páginas de restaurantes en el mes, % que calificó) |
 | GET | `/api/v1/analytics/recommendation-visits` | BQ9 (de los usuarios que abrieron recomendaciones por compatibilidad, % que llegó a uno de esos restaurantes, por mes) |
 | GET | `/api/v1/analytics/map-display-issues` | BQ14 (cargas del mapa con problemas, por tipo y por mes, y si conviene mejorar el mapa) |
@@ -325,7 +325,7 @@ Una sola página con **todas** las business questions del equipo, leída de la m
 endpoints `/api/v1/analytics/...` (no consulta la base directamente). Con el backend corriendo, abrir
 **http://localhost:8000/dashboard** en el navegador.
 
-- Una tarjeta por BQ: BQ1, BQ2, BQ4 y BQ15 (Tomas Diaz), BQ6 (Lucas Galindo), BQ7 y BQ8 (Camilo Linares), BQ10 y BQ13
+- Una tarjeta por BQ: BQ1, BQ2, BQ4 y BQ8 (Tomas Diaz), BQ6 (Lucas Galindo), BQ7 y BQ8 (Camilo Linares), BQ10 y BQ13
   (Gabriela Perdomo), BQ11 (Lucas Galindo), BQ12 (Alejandro Vides), BQ9 y BQ14 (Esteban Alvarado), con la pregunta, el número clave y un gráfico simple. La BQ14
   muestra los problemas por tipo, el % de cada mes y la recomendación (`IMPROVE` / `KEEP`) en grande.
 - Botón **Refresh** y actualización automática cada 30 s. Si un endpoint falla, solo su tarjeta muestra el error.
@@ -335,7 +335,7 @@ endpoints `/api/v1/analytics/...` (no consulta la base directamente). Con el bac
   de `python scripts/simulate_telemetry.py` llenan BQ1, BQ2 y BQ12; las demás tarjetas se llenan usando la app.
 - Para la demo, `python scripts/seed_dashboard.py` (con el backend corriendo) llena **todas** las tarjetas con datos
   sintéticos por la API (`platform=simulator`): cargas y búsquedas, tiempos de espera (de la última hora y de las
-  últimas 3 semanas, para la BQ15), favoritos de 12 meses, cuentas `sim-reviewer-N@campusbites.dev` que ven
+  últimas 3 semanas, para la BQ8), favoritos de 12 meses, cuentas `sim-reviewer-N@campusbites.dev` que ven
   restaurantes e intentan publicar reseñas, visitas con interacciones con las reseñas (BQ8) y votos Helpful,
   aperturas y visitas desde recomendaciones (BQ9) y cargas del mapa. Las reseñas
   quedan con la fecha de hoy, así que en la BQ10 solo el mes actual tiene calificaciones. La BQ11 sigue vacía
@@ -417,7 +417,7 @@ Ejemplo, BQ3:
 | Táctica **security – autenticación** | Email + contraseña (bcrypt) → JWT Bearer de 7 días; el `userId` sale del token y no se puede actuar a nombre de una cuenta registrada sin su token | `auth_service.py`, `security.py` (`optional_user_id`, `resolve_acting_user`) |
 | Táctica **interoperability** | Contrato JSON versionado (`/api/v1`), camelCase, CORS abierto para el otro front | `schemas.py`, `main.py` |
 
-## BQ15 · Best time to go (Sprint 4, Tomas Diaz)
+## BQ8 · Best time to go (Sprint 4, Tomas Diaz)
 
 **Tipo 2.** "At what time of the day is the reported waiting time at each restaurant the shortest?"
 Reutiliza los reportes de espera de la BQ4 (`wait_time_reports`): cada reporte cae en la hora local en que el

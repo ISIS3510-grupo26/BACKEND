@@ -28,7 +28,7 @@ class WaitTimesRepository:
         ).fetchone()
 
     def reports_since(self, since: datetime) -> list[sqlite3.Row]:
-        """BQ15: todos los reportes desde `since`, con su restaurante. La hora local se calcula en el servicio."""
+        """BQ8: todos los reportes desde `since`, con su restaurante. La hora local se calcula en el servicio."""
         return self.conn.execute(
             "SELECT spot_id, minutes, reported_at FROM wait_time_reports WHERE reported_at >= ?",
             (_iso(since),),
