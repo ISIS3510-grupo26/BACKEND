@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.config import settings
 from app.db import connect, init_db
+from app.demo_seed import seed_demo_wait_reports
 from app.repositories.spots_repository import SpotsRepository
 from app.routers import analytics, auth, best_for_you, matches, spots, telemetry, users
 
@@ -18,6 +20,8 @@ async def lifespan(_: FastAPI):
     try:
         init_db(conn)
         SpotsRepository(conn).sync_catalog()
+        if settings.demo_wait_reports:
+            seed_demo_wait_reports(conn, settings.demo_wait_reports)
     finally:
         conn.close()
     yield

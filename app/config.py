@@ -17,6 +17,8 @@ class Settings:
     jwt_secret: str | None = os.getenv("JWT_SECRET") or None
     # Vigencia del token: 7 dias. No hay refresh token; al vencer el cliente recibe 401 y debe volver a iniciar sesion.
     jwt_expire_minutes: int = int(os.getenv("JWT_EXPIRE_MINUTES", str(7 * 24 * 60)))
-
+    # Demo en Render: cuantos reportes de espera de ejemplo crear al arrancar si la base no tiene ninguno (0 = no).
+    demo_wait_reports: int = int(os.getenv("DEMO_WAIT_REPORTS", "0"))
+    
 
 settings = Settings()

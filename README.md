@@ -83,6 +83,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
   defecto 10080 = 7 días) controla la vigencia.
 - Modo caos (para demostrar BQ1/BQ2 con cargas reales lentas o fallidas):
   `CHAOS_MAX_DELAY_MS=5000 CHAOS_FAILURE_RATE=0.2 uvicorn app.main:app --host 0.0.0.0 --port 8000`
+- Reportes de espera de ejemplo (Render): con `DEMO_WAIT_REPORTS=250`, al arrancar y solo si la base no tiene ningún
+  reporte, se crean 250 reportes repartidos en los últimos 21 días (`platform=seed`, nunca del día de hoy). En el plan
+  gratis de Render el disco se borra en cada reinicio, así "Best time to go" siempre tiene datos; los reportes que
+  mandan las apps se suman encima. Por defecto es 0 (apagado), así local y en los tests la base empieza vacía.
 
 Desde el **emulador** Android el backend es `http://10.0.2.2:8000/` (valor por defecto en el front).
 En un **celular físico** agregar `API_BASE_URL=http://<IP-del-PC>:8000/` en `front-kotlin/gradle.properties`.
@@ -428,4 +432,3 @@ la mejor hora (menor promedio) y la peor; `byHour` de la raiz es todo el campus 
 
 Datos de prueba: `python scripts/simulate_wait_reports.py --n 250` manda reportes con `platform=simulator`
 repartidos en los ultimos 21 dias, con un pico distinto por restaurante.
-
